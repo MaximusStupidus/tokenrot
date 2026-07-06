@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>burnrate — the truth about your AI-coding spend</title>
+<meta name="description" content="One command shows where your Claude Code / Codex tokens and money actually go. 100% local. No signup." />
+<style>
+  :root { --bg:#0b0d12; --panel:#12151c; --line:#20242e; --txt:#d6dae2; --dim:#8a92a2; --amber:#f5b34a; --ember:#ff6a2b; --green:#3fd07f; --cyan:#5ad1e0; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:radial-gradient(ellipse at top,#141821 0%,var(--bg) 70%); color:var(--txt);
+    font:16px/1.6 ui-sans-serif,-apple-system,Segoe UI,Roboto,sans-serif; -webkit-font-smoothing:antialiased; }
+  .mono { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+  .wrap { max-width:820px; margin:0 auto; padding:64px 20px 80px; }
+  .tag { display:inline-block; background:var(--ember); color:#160b06; font-weight:700; padding:3px 10px; border-radius:6px; letter-spacing:.02em; }
+  h1 { font-size:clamp(34px,6vw,52px); line-height:1.05; margin:22px 0 10px; letter-spacing:-.02em; }
+  h1 .hl { color:var(--amber); }
+  .sub { color:var(--dim); font-size:clamp(17px,2.6vw,20px); max-width:600px; }
+  .cmd { margin:28px 0 8px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .cmd code { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px 18px;
+    font-size:18px; color:#fff; } .cmd code .p { color:var(--ember); }
+  .copy { color:var(--dim); font-size:13px; }
+  .badges { display:flex; gap:18px; flex-wrap:wrap; color:var(--dim); font-size:14px; margin-top:14px; }
+  .badges b { color:var(--green); }
+  .term { margin:44px 0; background:#0a0c11; border:1px solid var(--line); border-radius:14px; overflow:hidden;
+    box-shadow:0 30px 80px -30px rgba(0,0,0,.7); }
+  .term .bar { background:#11141b; border-bottom:1px solid var(--line); padding:10px 14px; display:flex; gap:8px; }
+  .dot { width:11px; height:11px; border-radius:50%; } .r{background:#ff5f57}.y{background:#febc2e}.g{background:#28c840}
+  .term pre { margin:0; padding:20px; font-size:13.5px; line-height:1.5; overflow-x:auto; color:var(--txt); }
+  .term .amber{color:var(--amber)} .term .ember{color:var(--ember);font-weight:700} .term .dim{color:var(--dim)}
+  .term .green{color:var(--green)} .term .white{color:#fff} .term .b{font-weight:700}
+  .term .g0{color:#3a4150} .term .barfill{color:var(--ember)}
+  h2 { font-size:26px; margin:56px 0 14px; letter-spacing:-.01em; }
+  p.lead { color:var(--dim); }
+  .soon { margin-top:56px; background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:26px; }
+  .soon h3 { margin:0 0 8px; font-size:20px; }
+  .soon p { color:var(--dim); margin:0 0 16px; }
+  form { display:flex; gap:10px; flex-wrap:wrap; }
+  input[type=email]{ flex:1; min-width:220px; background:#0a0c11; border:1px solid var(--line); border-radius:10px;
+    padding:12px 14px; color:#fff; font-size:15px; }
+  button{ background:var(--ember); color:#160b06; border:0; border-radius:10px; padding:12px 20px; font-weight:700;
+    font-size:15px; cursor:pointer; }
+  footer{ margin-top:64px; color:var(--dim); font-size:13px; border-top:1px solid var(--line); padding-top:20px; }
+  a{ color:var(--cyan); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <span class="tag">burnrate</span>
+  <h1>The truth about your <span class="hl">AI-coding spend</span>.</h1>
+  <p class="sub">One command shows where your Claude Code &amp; Codex tokens and money actually go.
+    Spoiler: the model is only "writing" for a fraction of a percent of what you pay for.</p>
+
+  <div class="cmd">
+    <code class="mono"><span class="p">npx</span> burnrate</code>
+    <span class="copy">no signup · no API key · nothing leaves your machine</span>
+  </div>
+  <div class="badges">
+    <span><b>🔒 100% local</b></span>
+    <span><b>0</b> dependencies</span>
+    <span><b>0</b> network calls</span>
+    <span>reads logs already on your disk</span>
+  </div>
+
+  <div class="term mono">
+    <div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span></div>
+    <pre>
+  <span class="ember b">burnrate</span>  <span class="dim">the truth about your AI-coding spend</span>
+
+  <span class="dim">Across</span> <span class="white">41,300</span> <span class="dim">messages, Claude was actually writing code</span>
+  <span class="ember b">0.5%</span> <span class="dim">of the time. The other 99.5% was reading context.</span>
+
+  <span class="dim">You've burned</span>  <span class="amber b">$9,240</span> <span class="dim">in API-equivalent value over 38 days.</span>
+
+  <span class="b">WHERE YOUR TOKENS WENT</span>
+  Re-reading old context <span class="g0">█████████████████████░</span>  95%   <span class="dim">cache read</span>
+  Loading new context    <span class="amber">█</span><span class="g0">░░░░░░░░░░░░░░░░░░░░░</span> 3.6%   <span class="dim">cache write</span>
+  Your prompts           <span class="g0">░░░░░░░░░░░░░░░░░░░░░░</span> 0.4%   <span class="dim">input</span>
+  Claude writing code    <span class="g0">░░░░░░░░░░░░░░░░░░░░░░</span> 0.5%   <span class="green">output ← the actual work</span>
+
+  <span class="ember">›</span> Opus alone was <span class="b">96%</span> of your bill.
+  <span class="ember">›</span> On a <span class="b">$200/mo</span> plan you're on pace for <span class="green b">40× your money's worth</span> this month.
+
+  <span class="b">WATCHDOG</span>  <span style="color:#ff5f57">▲</span>  Last 3 days are burning <span style="color:#ff5f57">1.8× your normal</span>.
+    </pre>
+  </div>
+
+  <h2>Why devs run it</h2>
+  <p class="lead">If you spend $100–600/month on AI coding tools, you've wondered: <em>am I getting my money's
+    worth? did it get slower this week? where is it all going?</em> burnrate answers that from your own logs —
+    no dashboard to log into, nothing uploaded. The re-reading number is the one nobody believes until they see it.</p>
+
+  <div class="soon">
+    <h3>Coming next: the watchdog 🐕</h3>
+    <p>See whether <b>you're being throttled, downgraded, or overcharged</b> compared to everyone else —
+      the independent referee for the tools you pay for. Only anonymous token/timing numbers, never your code.</p>
+    <form onsubmit="this.querySelector('button').textContent='Thanks — you\'re on the list';return false;">
+      <input type="email" placeholder="you@dev.com" required />
+      <button type="submit">Get early access</button>
+    </form>
+  </div>
+
+  <footer>
+    Free &amp; MIT. Costs are API-equivalent estimates. <span class="mono">npx burnrate</span> ·
+    your code never leaves your machine.
+  </footer>
+</div>
+</body>
+</html>

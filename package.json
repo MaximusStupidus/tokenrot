@@ -1,0 +1,35 @@
+{
+  "name": "burnrate",
+  "version": "0.1.0",
+  "description": "See where your AI-coding money actually goes. Reads your Claude Code / Codex logs locally — nothing leaves your machine.",
+  "type": "module",
+  "bin": {
+    "burnrate": "bin/burnrate.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node bin/burnrate.js",
+    "test": "node test/smoke.test.js"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "codex",
+    "ai",
+    "tokens",
+    "usage",
+    "cost",
+    "spend",
+    "cli"
+  ],
+  "license": "MIT",
+  "dependencies": {}
+}
