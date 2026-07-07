@@ -1,24 +1,24 @@
 <div align="center">
 
-# vibeaudit
+# tokenrot
 
 ### The truth about your AI-coding spend.
 
 One command shows where your **Claude Code** & **Codex** tokens and money *actually* go.
 Runs 100% on your machine — no signup, no API key, nothing uploaded.
 
-[![npm](https://img.shields.io/npm/v/vibeaudit?color=ff6a2b&label=npm)](https://www.npmjs.com/package/vibeaudit)
-[![CI](https://github.com/MaximusStupidus/vibeaudit/actions/workflows/ci.yml/badge.svg)](https://github.com/MaximusStupidus/vibeaudit/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/tokenrot?color=ff6a2b&label=npm)](https://www.npmjs.com/package/tokenrot)
+[![CI](https://github.com/MaximusStupidus/tokenrot/actions/workflows/ci.yml/badge.svg)](https://github.com/MaximusStupidus/tokenrot/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 ![node](https://img.shields.io/badge/node-%E2%89%A518-3fd07f)
 ![local](https://img.shields.io/badge/%F0%9F%94%92-100%25%20local-3fd07f)
 ![deps](https://img.shields.io/badge/dependencies-0-brightgreen)
 
 ```bash
-npx vibeaudit
+npx tokenrot
 ```
 
-<img src="https://raw.githubusercontent.com/MaximusStupidus/vibeaudit/main/docs/demo.svg" alt="vibeaudit output" width="720">
+<img src="https://raw.githubusercontent.com/MaximusStupidus/tokenrot/main/docs/demo.svg" alt="tokenrot output" width="720">
 
 </div>
 
@@ -27,7 +27,7 @@ npx vibeaudit
 ## The one stat nobody believes
 
 Across tens of thousands of messages, the model is only *"writing"* for **well under 1%** of your
-tokens. Almost everything you pay for is **re-reading the same context over and over.** `vibeaudit`
+tokens. Almost everything you pay for is **re-reading the same context over and over.** `tokenrot`
 computes that from your own logs and shows you the receipts — the model breakdown, the projected
 month, the priciest project, and a watchdog line that flags when your burn spikes above *your* normal.
 
@@ -42,7 +42,7 @@ month, the priciest project, and a watchdog line that flags when your burn spike
 
 ## Privacy (the whole point)
 
-Your **code and prompts never leave your machine. Full stop.** `vibeaudit` only reads token/usage
+Your **code and prompts never leave your machine. Full stop.** `tokenrot` only reads token/usage
 *metadata* — counts, timestamps, model names — from logs already on disk:
 
 | tool | path |
@@ -58,19 +58,19 @@ More detail: [docs/PRIVACY.md](docs/PRIVACY.md).
 ## Usage
 
 ```bash
-npx vibeaudit                 # full report
-npx vibeaudit --since 7       # only the last 7 days
-npx vibeaudit --plan 100      # value math vs your plan ($100 Max, $200 Ultra, …)
-npx vibeaudit --json          # raw numbers, for scripting
-npx vibeaudit --demo          # synthetic data (for screenshots / trying it out)
-npx vibeaudit --no-color      # plain text (or set NO_COLOR=1)
-npx vibeaudit --help
+npx tokenrot                 # full report
+npx tokenrot --since 7       # only the last 7 days
+npx tokenrot --plan 100      # value math vs your plan ($100 Max, $200 Ultra, …)
+npx tokenrot --json          # raw numbers, for scripting
+npx tokenrot --demo          # synthetic data (for screenshots / trying it out)
+npx tokenrot --no-color      # plain text (or set NO_COLOR=1)
+npx tokenrot --help
 ```
 
 Install it if you run it often:
 
 ```bash
-npm i -g vibeaudit && vibeaudit
+npm i -g tokenrot && tokenrot
 ```
 
 ## How the numbers are computed
@@ -98,7 +98,7 @@ Model prices change; PRs welcome.
 
 ## Roadmap
 
-`vibeaudit` is the free, local starting point. Coming next: an **opt-in** way to see whether **you're being
+`tokenrot` is the free, local starting point. Coming next: an **opt-in** way to see whether **you're being
 throttled, downgraded, or overcharged compared to everyone else** — the independent watchdog for the tools
 you pay for. Only anonymous token/timing numbers are ever shared, never your code.
 

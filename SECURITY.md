@@ -1,6 +1,6 @@
 # Security & privacy
 
-`vibeaudit` runs entirely on your machine, has zero runtime dependencies, and makes no network
+`tokenrot` runs entirely on your machine, has zero runtime dependencies, and makes no network
 requests. Your code and prompts are never read or transmitted (see [docs/PRIVACY.md](docs/PRIVACY.md)).
 
 ## Reporting

@@ -1,6 +1,6 @@
 # How costs are computed
 
-`vibeaudit` reports **API-equivalent cost** — what your usage *would* cost at pay-per-token API rates.
+`tokenrot` reports **API-equivalent cost** — what your usage *would* cost at pay-per-token API rates.
 If you're on a flat subscription (Claude Max, Cursor Ultra, …), you pay far less; the gap is the point.
 
 ## The formula

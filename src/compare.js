@@ -5,11 +5,11 @@ import crypto from "node:crypto";
 import { c, box, bar, padEnd, padStart } from "./ansi.js";
 import { usd } from "./render.js";
 
-export const API_BASE = process.env.VIBEAUDIT_API || "https://vibeaudit.comsync.in";
+export const API_BASE = process.env.TOKENROT_API || "https://tokenrot.comsync.in";
 
 // ── anonymous local id ──────────────────────────────────────────────
 function idPath() {
-  const dir = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config"), "vibeaudit");
+  const dir = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config"), "tokenrot");
   return { dir, file: path.join(dir, "id") };
 }
 export function getAnonId() {
@@ -71,7 +71,7 @@ export function showConsent(payload) {
   out.push("");
   out.push(`  ${c.green("✓")} ${c.dim("No account, no email. The id is a random string generated on your machine.")}`);
   out.push(`  ${c.green("✓")} ${c.dim("Never sent: your code, prompts, file names, or project names.")}`);
-  out.push(`  ${c.green("✓")} ${c.dim("The server stores no IP address. Delete anytime with ")}${c.cyan("vibeaudit --forget")}${c.dim(".")}`);
+  out.push(`  ${c.green("✓")} ${c.dim("The server stores no IP address. Delete anytime with ")}${c.cyan("tokenrot --forget")}${c.dim(".")}`);
   out.push("");
   return out.join("\n");
 }
@@ -144,7 +144,7 @@ export function renderComparison(res, payload) {
   }
   p();
   if (res.url) p(`  ${c.gray("your card:")}  ${c.cyan(res.url)}`);
-  p(`  ${c.dim("see everyone:")} ${c.cyan(API_BASE)}   ${c.dim("·  delete your data:")} ${c.cyan("vibeaudit --forget")}`);
+  p(`  ${c.dim("see everyone:")} ${c.cyan(API_BASE)}   ${c.dim("·  delete your data:")} ${c.cyan("tokenrot --forget")}`);
   p();
   return L.join("\n");
 }

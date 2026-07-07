@@ -1,6 +1,6 @@
 # Privacy
 
-`vibeaudit` is designed so that **your code and prompts never leave your machine.**
+`tokenrot` is designed so that **your code and prompts never leave your machine.**
 
 ## What it reads
 Only local files that already exist on disk:
@@ -13,7 +13,7 @@ From each log line it extracts **usage metadata only**: token counts
 content sits in the same files.
 
 ## What it sends
-**Nothing.** `vibeaudit` makes zero network requests. There is no account, no API key, no telemetry,
+**Nothing.** `tokenrot` makes zero network requests. There is no account, no API key, no telemetry,
 no "anonymous analytics." You can confirm this two ways:
 1. Read the source — it's ~500 lines with **zero runtime dependencies**. Search it for `fetch`,
    `http`, `net`, `dns` — there are none.

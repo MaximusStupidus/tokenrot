@@ -11,9 +11,9 @@ const val = (f, d) => { const i = args.indexOf(f); return i >= 0 && args[i + 1] 
 
 if (has("-h") || has("--help")) {
   console.log(`
-  ${c.bgOrange(" vibeaudit ")}  the truth about your AI-coding spend
+  ${c.bgOrange(" tokenrot ")}  the truth about your AI-coding spend
 
-  Usage:  npx vibeaudit [options]
+  Usage:  npx tokenrot [options]
 
   Reads your local Claude Code / Codex logs and shows where your
   tokens and money actually go. 100% on-device — nothing is uploaded.
@@ -53,7 +53,7 @@ if (has("--forget")) {
 const sources = discoverSources();
 if (sources.length === 0) {
   console.log(`
-  ${c.bgOrange(" vibeaudit ")}
+  ${c.bgOrange(" tokenrot ")}
 
   ${c.yellow("No Claude Code or Codex logs found on this machine.")}
 
@@ -61,7 +61,7 @@ if (sources.length === 0) {
     ~/.claude/projects/**/*.jsonl   ${c.dim("(Claude Code)")}
     ~/.codex/sessions/**/*.jsonl    ${c.dim("(Codex)")}
 
-  Use one of those tools, then run ${c.cyan("npx vibeaudit")} again.
+  Use one of those tools, then run ${c.cyan("npx tokenrot")} again.
 `);
   process.exit(0);
 }

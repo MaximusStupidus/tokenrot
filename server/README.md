@@ -1,6 +1,6 @@
-# vibeaudit compare server
+# tokenrot compare server
 
-Tiny Bun + `bun:sqlite` service backing `vibeaudit --compare`. Zero external deps.
+Tiny Bun + `bun:sqlite` service backing `tokenrot --compare`. Zero external deps.
 
 - `POST /submit` — upsert one anonymous aggregate row (by random id), returns your percentiles.
 - `POST /forget` — delete a row by id.
@@ -9,7 +9,7 @@ Tiny Bun + `bun:sqlite` service backing `vibeaudit --compare`. Zero external dep
 - `GET /health`.
 
 **Stores only anonymous aggregate numbers** (spend totals, %s, model mix). Never code, prompts, file
-names, or IPs. Run: `PORT=7200 VIBEAUDIT_DB=./vibeaudit.db PUBLIC_BASE=https://vibeaudit.comsync.in bun server/server.js`.
+names, or IPs. Run: `PORT=7200 VIBEAUDIT_DB=./tokenrot.db PUBLIC_BASE=https://tokenrot.comsync.in bun server/server.js`.
 
 _Not shipped in the npm package_ (excluded from `package.json` "files").
 

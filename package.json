@@ -1,10 +1,10 @@
 {
-  "name": "vibeaudit",
+  "name": "tokenrot",
   "version": "0.1.0",
   "description": "See where your AI-coding money actually goes. Reads your Claude Code / Codex logs locally — nothing leaves your machine.",
   "type": "module",
   "bin": {
-    "vibeaudit": "bin/vibeaudit.js"
+    "tokenrot": "bin/tokenrot.js"
   },
   "files": [
     "bin",
@@ -17,8 +17,8 @@
     "node": ">=18"
   },
   "scripts": {
-    "start": "node bin/vibeaudit.js",
-    "demo": "node bin/vibeaudit.js --demo",
+    "start": "node bin/tokenrot.js",
+    "demo": "node bin/tokenrot.js --demo",
     "gen-demo": "node scripts/gen-demo.mjs > docs/demo.svg",
     "test": "node test/smoke.test.js"
   },
@@ -38,11 +38,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/MaximusStupidus/vibeaudit.git"
+    "url": "git+https://github.com/MaximusStupidus/tokenrot.git"
   },
   "bugs": {
-    "url": "https://github.com/MaximusStupidus/vibeaudit/issues"
+    "url": "https://github.com/MaximusStupidus/tokenrot/issues"
   },
-  "homepage": "https://github.com/MaximusStupidus/vibeaudit#readme",
+  "homepage": "https://github.com/MaximusStupidus/tokenrot#readme",
   "dependencies": {}
 }

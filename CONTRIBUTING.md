@@ -1,13 +1,13 @@
 # Contributing
 
-Thanks for helping make `vibeaudit` better.
+Thanks for helping make `tokenrot` better.
 
 ## Quick start
 ```bash
-git clone https://github.com/MaximusStupidus/vibeaudit
-cd vibeaudit
-node bin/vibeaudit.js        # run against your own logs
-node bin/vibeaudit.js --demo # run against synthetic data
+git clone https://github.com/MaximusStupidus/tokenrot
+cd tokenrot
+node bin/tokenrot.js        # run against your own logs
+node bin/tokenrot.js --demo # run against synthetic data
 npm test                    # smoke tests (no real logs needed)
 ```
 

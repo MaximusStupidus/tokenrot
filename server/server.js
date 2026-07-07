@@ -1,10 +1,10 @@
-// vibeaudit compare server — Bun + bun:sqlite, zero external deps.
+// tokenrot compare server — Bun + bun:sqlite, zero external deps.
 // Stores only anonymous aggregate numbers. No accounts. No IP logging.
 import { Database } from "bun:sqlite";
 
 const PORT = Number(process.env.PORT || 7200);
-const DB_PATH = process.env.VIBEAUDIT_DB || "./vibeaudit.db";
-const BASE = process.env.PUBLIC_BASE || "https://vibeaudit.comsync.in";
+const DB_PATH = process.env.VIBEAUDIT_DB || "./tokenrot.db";
+const BASE = process.env.PUBLIC_BASE || "https://tokenrot.comsync.in";
 
 const db = new Database(DB_PATH);
 db.exec("PRAGMA journal_mode = WAL;");
@@ -222,13 +222,13 @@ function pageHtml(focusId, demo = false) {
   const body = d ? youBody(d, demo) : crowdBody(n, med, counts);
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>vibeaudit — your AI-coding spend, ranked</title>
-<meta property="og:title" content="vibeaudit — your AI-coding spend, ranked"/>
+<title>tokenrot — your AI-coding spend, ranked</title>
+<meta property="og:title" content="tokenrot — your AI-coding spend, ranked"/>
 <meta name="theme-color" content="#0a0c11"/>
 <style>${CSS}</style></head><body><div class="wrap"><div class="card">${body}
-<div class="foot"><span class="cmd"><b>npx</b> vibeaudit --compare</span>
+<div class="foot"><span class="cmd"><b>npx</b> tokenrot --compare</span>
 <span class="priv"><b>🔒 100% anonymous.</b> Only aggregate numbers are shared — never your code, prompts, file names, or IP.
-Delete anytime with <span class="num">vibeaudit --forget</span>.</span></div>
+Delete anytime with <span class="num">tokenrot --forget</span>.</span></div>
 </div></div></body></html>`;
 }
 
@@ -236,10 +236,10 @@ function youBody(d, demo) {
   const mix = `<div class="mix"><span class="op" style="width:${d.opus}%">Opus ${d.opus}%</span><span class="ot" style="width:${100 - d.opus}%"></span></div>
     <div class="legend"><span><i style="background:#ff6a2b"></i>Opus ${d.opus}%</span><span><i style="background:#2a3243"></i>Everything else ${100 - d.opus}%</span></div>`;
   return `
-  <div class="head"><span class="brand"><span class="dot"></span>vibeaudit</span><span class="tool num">Claude Code${demo ? " · demo" : ""}</span></div>
+  <div class="head"><span class="brand"><span class="dot"></span>tokenrot</span><span class="tool num">Claude Code${demo ? " · demo" : ""}</span></div>
   <div class="hero anim"><span class="badge"><span class="b-lab">Spender rank</span><span class="b-num num">TOP ${Math.max(1, 100 - d.spendPct)}%</span></span>
     <h1>You out-spend <em>${d.spendPct}%</em> of developers.</h1>
-    <p class="sub">Ranked against <b class="num">${d.cohort.toLocaleString()}</b> devs running <span class="num">vibeaudit --compare</span></p></div>
+    <p class="sub">Ranked against <b class="num">${d.cohort.toLocaleString()}</b> devs running <span class="num">tokenrot --compare</span></p></div>
   <div class="tiles anim" style="animation-delay:.05s">
     <div class="tile money"><span class="t-lab">Proj / month</span><span class="t-num num">${$(d.proj)}</span><span class="t-sub num">median ${$(d.medProj)}</span></div>
     <div class="tile hot"><span class="t-lab">Writing code</span><span class="t-num num">${d.gen}%</span><span class="t-sub">of your tokens</span></div>
@@ -258,16 +258,16 @@ function youBody(d, demo) {
 
 function crowdBody(n, med, counts) {
   if (n === 0) return `
-  <div class="head"><span class="brand"><span class="dot"></span>vibeaudit</span><span class="tool">the AI-spend index</span></div>
+  <div class="head"><span class="brand"><span class="dot"></span>tokenrot</span><span class="tool">the AI-spend index</span></div>
   <div class="hero anim"><h1>See where your AI-coding<br/>spend really <em>ranks</em>.</h1>
     <p class="sub">Run one command locally — nothing leaves your machine — then compare, 100% anonymously.</p></div>
   <div class="sec anim" style="animation-delay:.1s"><div class="sec-h"><h2>Try it</h2></div>
     <p style="color:var(--dim);font-size:14px;margin:0">The model is only "writing" a fraction of a percent of your tokens.
-    See your real number, and how it stacks up: <span class="num" style="color:var(--cyan)">npx vibeaudit --compare</span></p></div>`;
+    See your real number, and how it stacks up: <span class="num" style="color:var(--cyan)">npx tokenrot --compare</span></p></div>`;
   return `
-  <div class="head"><span class="brand"><span class="dot"></span>vibeaudit</span><span class="tool">the AI-spend index</span></div>
+  <div class="head"><span class="brand"><span class="dot"></span>tokenrot</span><span class="tool">the AI-spend index</span></div>
   <div class="hero anim"><h1>How <em>${n.toLocaleString()}</em> developers spend on AI coding.</h1>
-    <p class="sub">Anonymous, self-reported from devs running <span class="num">vibeaudit --compare</span></p></div>
+    <p class="sub">Anonymous, self-reported from devs running <span class="num">tokenrot --compare</span></p></div>
   <div class="tiles anim" style="animation-delay:.05s">
     <div class="tile"><span class="t-lab">Developers</span><span class="t-num num">${n.toLocaleString()}</span><span class="t-sub">compared</span></div>
     <div class="tile money"><span class="t-lab">Median / month</span><span class="t-num num">${med ? $(med) : "—"}</span><span class="t-sub">projected</span></div>
@@ -277,4 +277,4 @@ function crowdBody(n, med, counts) {
     <div class="hist">${histHtml(counts, -1)}</div></div>`;
 }
 
-console.log(`vibeaudit compare server on :${PORT} (db ${DB_PATH})`);
+console.log(`tokenrot compare server on :${PORT} (db ${DB_PATH})`);

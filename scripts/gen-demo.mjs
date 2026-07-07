@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-// Render `vibeaudit --demo` and convert the ANSI output into a self-contained SVG "terminal screenshot".
+// Render `tokenrot --demo` and convert the ANSI output into a self-contained SVG "terminal screenshot".
 // Usage: node scripts/gen-demo.mjs > docs/demo.svg
 import { execSync } from "node:child_process";
 
-const raw = execSync("node bin/vibeaudit.js --demo", { env: { ...process.env, FORCE_COLOR: "1" } }).toString();
+const raw = execSync("node bin/tokenrot.js --demo", { env: { ...process.env, FORCE_COLOR: "1" } }).toString();
 
-// 256-color / basic ANSI → hex (only the palette vibeaudit uses)
+// 256-color / basic ANSI → hex (only the palette tokenrot uses)
 const C256 = { 16: "#0b0d12", 154: "#afff00", 202: "#ff5f00", 205: "#ff5faf", 208: "#ff8700", 214: "#ffaf00" };
 const BASIC = { 31: "#f2555a", 32: "#3fd07f", 33: "#e6c07b", 34: "#61afef", 35: "#c678dd", 36: "#5ad1e0", 37: "#e6e6e6", 90: "#7a8290", 39: "#d6dae2" };
 
