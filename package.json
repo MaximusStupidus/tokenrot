@@ -1,10 +1,10 @@
 {
-  "name": "burnrate",
+  "name": "vibeaudit",
   "version": "0.1.0",
   "description": "See where your AI-coding money actually goes. Reads your Claude Code / Codex logs locally — nothing leaves your machine.",
   "type": "module",
   "bin": {
-    "burnrate": "bin/burnrate.js"
+    "vibeaudit": "bin/vibeaudit.js"
   },
   "files": [
     "bin",
@@ -17,8 +17,8 @@
     "node": ">=18"
   },
   "scripts": {
-    "start": "node bin/burnrate.js",
-    "demo": "node bin/burnrate.js --demo",
+    "start": "node bin/vibeaudit.js",
+    "demo": "node bin/vibeaudit.js --demo",
     "gen-demo": "node scripts/gen-demo.mjs > docs/demo.svg",
     "test": "node test/smoke.test.js"
   },
@@ -38,11 +38,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/MaximusStupidus/burnrate.git"
+    "url": "git+https://github.com/MaximusStupidus/vibeaudit.git"
   },
   "bugs": {
-    "url": "https://github.com/MaximusStupidus/burnrate/issues"
+    "url": "https://github.com/MaximusStupidus/vibeaudit/issues"
   },
-  "homepage": "https://github.com/MaximusStupidus/burnrate#readme",
+  "homepage": "https://github.com/MaximusStupidus/vibeaudit#readme",
   "dependencies": {}
 }

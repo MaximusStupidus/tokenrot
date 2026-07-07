@@ -1,13 +1,13 @@
 # Contributing
 
-Thanks for helping make `burnrate` better.
+Thanks for helping make `vibeaudit` better.
 
 ## Quick start
 ```bash
-git clone https://github.com/MaximusStupidus/burnrate
-cd burnrate
-node bin/burnrate.js        # run against your own logs
-node bin/burnrate.js --demo # run against synthetic data
+git clone https://github.com/MaximusStupidus/vibeaudit
+cd vibeaudit
+node bin/vibeaudit.js        # run against your own logs
+node bin/vibeaudit.js --demo # run against synthetic data
 npm test                    # smoke tests (no real logs needed)
 ```
 

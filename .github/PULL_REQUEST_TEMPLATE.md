@@ -4,4 +4,4 @@
 - [ ] No new runtime dependencies
 - [ ] No network calls added to the CLI
 - [ ] `npm test` passes
-- [ ] `node bin/burnrate.js --demo` still renders
+- [ ] `node bin/vibeaudit.js --demo` still renders

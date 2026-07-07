@@ -1,6 +1,6 @@
 # How costs are computed
 
-`burnrate` reports **API-equivalent cost** — what your usage *would* cost at pay-per-token API rates.
+`vibeaudit` reports **API-equivalent cost** — what your usage *would* cost at pay-per-token API rates.
 If you're on a flat subscription (Claude Max, Cursor Ultra, …), you pay far less; the gap is the point.
 
 ## The formula

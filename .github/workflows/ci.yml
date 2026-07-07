@@ -15,8 +15,8 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
       - name: Syntax check
-        run: node --check bin/burnrate.js
+        run: node --check bin/vibeaudit.js
       - name: Test
         run: npm test
       - name: Demo renders
-        run: node bin/burnrate.js --demo > /dev/null
+        run: node bin/vibeaudit.js --demo > /dev/null

@@ -18,7 +18,7 @@ export function render(x, meta) {
 
   // ── banner ──────────────────────────────────────────────
   p();
-  p(`  ${c.bgOrange(" burnrate ")}  ${c.gray("the truth about your AI-coding spend")}`);
+  p(`  ${c.bgOrange(" vibeaudit ")}  ${c.gray("the truth about your AI-coding spend")}`);
   p();
 
   // ── headline shock ──────────────────────────────────────
@@ -119,16 +119,16 @@ export function render(x, meta) {
     `${c.gray("Spent re-reading context:")}      ${c.white(pct(x.rereadPct))}`,
     `${c.gray("This month → projected:")}        ${usd(x.thisMonthCost)} → ${usd(x.projectedMonthCost)}`,
     ``,
-    `${c.gray("see yours:")}  ${c.cyan("npx burnrate")}`,
+    `${c.gray("see yours:")}  ${c.cyan("npx vibeaudit")}`,
   ];
   p("  " + box(card, { title: c.ember("SHARE CARD"), color: c.gray, width: 52 }).split("\n").join("\n  "));
   p();
 
   // ── footer ──────────────────────────────────────────────
-  if (meta.demo) p(`  ${c.amber("◆ demo data.")} ${c.dim("Run ")}${c.cyan("npx burnrate")}${c.dim(" to see your own real numbers.")}`);
+  if (meta.demo) p(`  ${c.amber("◆ demo data.")} ${c.dim("Run ")}${c.cyan("npx vibeaudit")}${c.dim(" to see your own real numbers.")}`);
   else p(`  ${c.green("🔒 100% local.")} ${c.dim("Read " + meta.fileCount.toLocaleString() + " log files on your machine. Nothing was uploaded. No account.")}`);
   p(`  ${c.dim("Costs are API-equivalent estimates — edit prices in src/pricing.js. Fable pricing is estimated.")}`);
-  p(`  ${c.gray("soon:")} ${c.dim("see if you're being throttled or overcharged vs everyone else →")} ${c.cyan("burnrate.dev")}`);
+  p(`  ${c.gray("soon:")} ${c.dim("see if you're being throttled or overcharged vs everyone else →")} ${c.cyan("vibeaudit.dev")}`);
   p();
 
   return L.join("\n");

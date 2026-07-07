@@ -24,7 +24,7 @@ ok("costOf sums components", () => {
 });
 
 ok("parseFile reads a synthetic Claude line", () => {
-  const tmp = path.join(os.tmpdir(), "burnrate-test-" + Date.now() + ".jsonl");
+  const tmp = path.join(os.tmpdir(), "vibeaudit-test-" + Date.now() + ".jsonl");
   const line = JSON.stringify({
     type: "assistant",
     timestamp: new Date().toISOString(),

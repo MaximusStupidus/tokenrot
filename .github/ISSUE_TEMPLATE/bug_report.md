@@ -8,7 +8,7 @@ labels: bug
 
 **What you expected**
 
-**Command run** (e.g. `npx burnrate --since 7`)
+**Command run** (e.g. `npx vibeaudit --since 7`)
 
 **Environment**
 - OS:
