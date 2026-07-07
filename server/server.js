@@ -92,6 +92,7 @@ Bun.serve({
       const id = p.startsWith("/u/") ? decodeURIComponent(p.slice(3)) : null;
       return new Response(pageHtml(id), { headers: { "content-type": "text/html; charset=utf-8" } });
     }
+    if (p === "/demo") return new Response(pageHtml(null, true), { headers: { "content-type": "text/html; charset=utf-8" } });
     return new Response("not found", { status: 404 });
   },
 });
@@ -103,62 +104,162 @@ function statsPayload() {
   return out;
 }
 
-function pageHtml(focusId) {
-  const { n, cols } = cohortValues();
-  const row = focusId ? getRow.get(focusId) : null;
-  const proj = cols.projectedUsd;
-  const med = median(proj);
-  // simple histogram buckets for projected monthly spend
-  const buckets = [0, 100, 300, 600, 1000, 2000, 5000, 1e9];
-  const labels = ["<$100", "$100–300", "$300–600", "$600–1k", "$1k–2k", "$2k–5k", "$5k+"];
-  const counts = new Array(labels.length).fill(0);
-  for (const v of proj) { for (let i = 0; i < labels.length; i++) if (v < buckets[i + 1]) { counts[i]++; break; } }
+const CSS = `
+:root{--bg:#0a0c11;--panel:#121723;--panel2:#171d2b;--line:#232a3a;--line2:#2d3547;--txt:#e8ebf2;--dim:#8b93a4;--faint:#5c6376;--ember:#ff6a2b;--ember-soft:#ff8a54;--amber:#ffb347;--green:#43d17f;--red:#ff5a52;--cyan:#5ad1e0;--mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;--sans:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(1200px 600px at 50% -10%,#16233a 0,transparent 60%),radial-gradient(800px 500px at 90% 20%,#2a1508 0,transparent 55%),var(--bg);color:var(--txt);font-family:var(--sans);line-height:1.5;-webkit-font-smoothing:antialiased}
+.wrap{max-width:660px;margin:0 auto;padding:34px 20px 60px}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.card{background:linear-gradient(180deg,#0e1420,#0b0f18);border:1px solid var(--line);border-radius:20px;overflow:hidden;box-shadow:0 40px 120px -40px rgba(0,0,0,.8),inset 0 1px 0 rgba(255,255,255,.03)}
+.head{display:flex;align-items:center;justify-content:space-between;padding:16px 22px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.015)}
+.brand{display:flex;align-items:center;gap:9px;font-weight:800;letter-spacing:-.02em;font-size:16px}
+.brand .dot{width:9px;height:9px;border-radius:50%;background:var(--ember);box-shadow:0 0 12px 1px var(--ember)}
+.tool{font-size:12px;color:var(--dim)}
+.hero{padding:34px 26px 26px;text-align:center}
+.badge{display:inline-flex;align-items:baseline;gap:10px;padding:7px 16px;border-radius:999px;background:rgba(255,106,43,.12);border:1px solid rgba(255,106,43,.4);margin-bottom:18px}
+.badge .b-lab{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--ember-soft);font-weight:700}
+.badge .b-num{font-weight:800;color:var(--ember);font-size:14px}
+.hero h1{margin:0;font-size:clamp(24px,5.6vw,34px);font-weight:800;letter-spacing:-.03em;text-wrap:balance;line-height:1.08}
+.hero h1 em{font-style:normal;color:var(--amber)}
+.hero .sub{margin:12px 0 0;color:var(--dim);font-size:14px}
+.hero .sub b{color:var(--txt)}
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.tile{background:#0d121c;padding:18px 16px;display:flex;flex-direction:column;gap:5px;min-height:104px}
+.tile .t-lab{font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--faint);font-weight:700}
+.tile .t-num{font-size:26px;font-weight:700;letter-spacing:-.02em;line-height:1}
+.tile .t-sub{font-size:11.5px;color:var(--dim);margin-top:auto}
+.tile.money .t-num{color:var(--amber)}.tile.hot .t-num{color:var(--ember)}
+@media(max-width:560px){.tiles{grid-template-columns:repeat(2,1fr)}}
+.sec{padding:26px 26px 6px}
+.sec-h{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:20px}
+.sec-h h2{margin:0;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);font-weight:700}
+.sec-h .note{font-size:11.5px;color:var(--faint)}
+.rk{margin-bottom:22px}
+.rk-top{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:12px}
+.rk-top .l{font-size:13.5px;color:var(--txt);font-weight:600}.rk-top .r{display:flex;align-items:baseline;gap:10px}
+.rk-top .v{font-size:14px;font-weight:700}
+.tag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px}
+.tag.top{color:var(--ember);background:rgba(255,106,43,.13)}.tag.bot{color:var(--dim);background:rgba(255,255,255,.05)}
+.track{position:relative;height:12px;border-radius:8px;background:linear-gradient(90deg,#1a2130,#242c3d 45%,#3a2a1c 78%,#4a2a12);box-shadow:inset 0 1px 2px rgba(0,0,0,.5)}
+.track .med{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--faint);border-radius:2px;opacity:.8}
+.track .med::after{content:"median";position:absolute;top:-16px;left:50%;transform:translateX(-50%);font-family:var(--mono);font-size:9px;color:var(--faint);white-space:nowrap}
+.track .you{position:absolute;top:50%;width:16px;height:16px;border-radius:50%;background:var(--ember);border:2px solid #0b0f18;transform:translate(-50%,-50%);box-shadow:0 0 0 4px rgba(255,106,43,.22),0 0 16px 2px rgba(255,106,43,.6);z-index:2}
+.mix{display:flex;height:30px;border-radius:9px;overflow:hidden;border:1px solid var(--line2)}
+.mix span{display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:11px;font-weight:700;color:#0b0f18;min-width:0}
+.mix .op{background:linear-gradient(180deg,#ff8a54,#ff6a2b)}.mix .ot{background:#2a3243}
+.legend{display:flex;gap:18px;margin-top:12px;font-size:12px;color:var(--dim)}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px;vertical-align:middle}
+.hist{display:flex;flex-direction:column;gap:8px}
+.hrow{display:flex;align-items:center;gap:12px}
+.hrow .hl{width:78px;text-align:right;font-family:var(--mono);font-size:11.5px;color:var(--dim)}
+.hrow .ht{flex:1;height:16px;background:#0d121c;border-radius:5px;overflow:hidden}
+.hrow .hf{height:100%;background:#2b3444;border-radius:5px}
+.hrow.you .hf{background:linear-gradient(90deg,#ff6a2b,#ff8a54);box-shadow:0 0 14px rgba(255,106,43,.5)}
+.hrow .hc{width:56px;font-family:var(--mono);font-size:11.5px;color:var(--faint)}.hrow.you .hc{color:var(--ember);font-weight:700}
+.foot{margin-top:14px;padding:18px 26px 22px;border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.cmd{font-family:var(--mono);font-size:13px;background:#0d121c;border:1px solid var(--line2);border-radius:9px;padding:9px 13px;color:var(--txt)}.cmd b{color:var(--ember)}
+.priv{font-size:11.5px;color:var(--faint);max-width:320px}.priv b{color:var(--green)}
+.anim{opacity:0;transform:translateY(10px);animation:rise .6s cubic-bezier(.16,1,.3,1) forwards}
+@keyframes rise{to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.anim{animation:none;opacity:1;transform:none}}
+`;
+const HIST_LABELS = ["<$100", "$100–300", "$300–600", "$600–1k", "$1k–2k", "$2k–5k", "$5k+"];
+const HIST_EDGES = [0, 100, 300, 600, 1000, 2000, 5000, 1e9];
+const DEMO = { proj: 9240, avgDaily: 304, gen: 0.5, reread: 96, opus: 97, spendPct: 92, genPct: 12, rereadPct: 91, opusPct: 96, dayPct: 93, cohort: 1284, medProj: 3808, counts: [34, 62, 100, 58, 36, 20, 11], youBucket: 6 };
+
+const $ = (n) => "$" + Math.round(n).toLocaleString("en-US");
+const bucketOf = (v) => { for (let i = 0; i < HIST_LABELS.length; i++) if (v < HIST_EDGES[i + 1]) return i; return HIST_LABELS.length - 1; };
+
+function rankTrack(label, valStr, pct) {
+  const top = 100 - pct;
+  const tag = pct >= 50 ? `<span class="tag top num">top ${Math.max(1, top)}%</span>` : `<span class="tag bot num">bottom ${Math.max(1, pct)}%</span>`;
+  return `<div class="rk"><div class="rk-top"><span class="l">${label}</span><span class="r"><span class="v num">${valStr}</span>${tag}</span></div>
+    <div class="track"><div class="med" style="left:50%"></div><div class="you" style="left:${Math.max(3, Math.min(97, pct))}%"></div></div></div>`;
+}
+function histHtml(counts, youBucket) {
   const maxc = Math.max(1, ...counts);
-  let userBucket = -1;
-  if (row) for (let i = 0; i < labels.length; i++) if (row.projectedUsd < buckets[i + 1]) { userBucket = i; break; }
-  const bars = labels.map((lb, i) => `
-    <div class="brow">
-      <div class="blab">${lb}</div>
-      <div class="btrack"><div class="bfill${i === userBucket ? " you" : ""}" style="width:${Math.round((counts[i] / maxc) * 100)}%"></div></div>
-      <div class="bcount">${counts[i]}${i === userBucket ? ' <span class="youtag">you</span>' : ""}</div>
-    </div>`).join("");
-  const youLine = row
-    ? `<p class="you-summary">You're on pace for <b>$${Math.round(row.projectedUsd).toLocaleString()}/mo</b> — the model was "writing" <b>${row.genPct}%</b> of your tokens, and Opus is <b>${row.opusSharePct}%</b> of your bill.</p>`
-    : "";
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>vibeaudit — how your AI-coding spend compares</title>
-<style>
-:root{--bg:#0b0d12;--panel:#12151c;--line:#20242e;--txt:#d6dae2;--dim:#8a92a2;--amber:#f5b34a;--ember:#ff6a2b;--green:#3fd07f;--cyan:#5ad1e0}
-*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top,#141821,var(--bg) 70%);color:var(--txt);font:16px/1.6 ui-sans-serif,-apple-system,Segoe UI,Roboto,sans-serif}
-.wrap{max-width:760px;margin:0 auto;padding:56px 20px 80px}.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
-.tag{display:inline-block;background:var(--ember);color:#160b06;font-weight:700;padding:3px 10px;border-radius:6px}
-h1{font-size:clamp(26px,5vw,38px);margin:18px 0 6px;letter-spacing:-.02em}.sub{color:var(--dim)}
-.stat{display:flex;gap:26px;flex-wrap:wrap;margin:26px 0}.stat div b{font-size:26px}.stat div span{color:var(--dim);font-size:13px;display:block}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px 24px;margin-top:24px}
-.card h2{margin:0 0 16px;font-size:16px;color:var(--dim);font-weight:600;letter-spacing:.02em;text-transform:uppercase}
-.brow{display:flex;align-items:center;gap:12px;margin:7px 0}.blab{width:86px;color:var(--dim);font-size:13px;text-align:right}
-.btrack{flex:1;background:#0a0c11;border-radius:6px;height:20px;overflow:hidden}.bfill{height:100%;background:#2b3342;border-radius:6px}
-.bfill.you{background:var(--ember)}.bcount{width:60px;font-size:13px;color:var(--dim)}.youtag{color:var(--ember);font-weight:700}
-.you-summary{background:#161a22;border:1px solid var(--line);border-left:3px solid var(--ember);border-radius:8px;padding:12px 16px;margin-top:20px}
-.trust{margin-top:34px;color:var(--dim);font-size:13px;border-top:1px solid var(--line);padding-top:18px}
-code{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 12px;color:#fff}.cyan{color:var(--cyan)}
-</style></head><body><div class="wrap">
-<span class="tag">vibeaudit</span>
-<h1>How your AI-coding spend compares</h1>
-<p class="sub">Anonymous, self-reported numbers from developers running <span class="mono">vibeaudit --compare</span>.</p>
-${youLine}
-<div class="stat">
-  <div><b>${n.toLocaleString()}</b><span>developers</span></div>
-  <div><b>$${med ? Math.round(med).toLocaleString() : "—"}</b><span>median projected / month</span></div>
-</div>
-<div class="card"><h2>Projected monthly spend — distribution</h2>${bars}</div>
-<p style="margin-top:26px">See your own numbers: <code class="mono"><span class="cyan">npx</span> vibeaudit --compare</code></p>
-<div class="trust">
-🔒 <b>What we store:</b> only anonymous aggregate numbers (spend totals, percentages, model mix). <b>Never</b> your code,
-prompts, file names, or project names. No accounts, no email, <b>no IP addresses</b>. Each row is a random id you can
-delete anytime with <span class="mono">vibeaudit --forget</span>. The client is open source — verify exactly what's sent.
-</div>
-</div></body></html>`;
+  return HIST_LABELS.map((lb, i) => `<div class="hrow${i === youBucket ? " you" : ""}"><span class="hl">${lb}</span>
+    <span class="ht"><span class="hf" style="width:${Math.round((counts[i] / maxc) * 100)}%"></span></span>
+    <span class="hc">${i === youBucket ? "you" : counts[i]}</span></div>`).join("");
+}
+
+function pageHtml(focusId, demo = false) {
+  const { n, cols } = cohortValues();
+  const counts = new Array(HIST_LABELS.length).fill(0);
+  for (const v of cols.projectedUsd) counts[bucketOf(v)]++;
+  const med = median(cols.projectedUsd);
+
+  let d = null; // per-user data
+  if (demo) d = DEMO;
+  else if (focusId) {
+    const row = getRow.get(focusId);
+    if (row) {
+      const cmp = compareFor(row);
+      d = {
+        proj: row.projectedUsd, avgDaily: row.avgDailyUsd, gen: row.genPct, reread: row.rereadPct, opus: row.opusSharePct,
+        spendPct: cmp.pct.projectedUsd ?? 50, genPct: cmp.pct.genPct ?? 50, rereadPct: cmp.pct.rereadPct ?? 50,
+        opusPct: cmp.pct.opusSharePct ?? 50, dayPct: cmp.pct.avgDailyUsd ?? 50,
+        cohort: cmp.cohort, medProj: cmp.median.projectedUsd, counts, youBucket: bucketOf(row.projectedUsd),
+      };
+    }
+  }
+
+  const body = d ? youBody(d, demo) : crowdBody(n, med, counts);
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>vibeaudit — your AI-coding spend, ranked</title>
+<meta property="og:title" content="vibeaudit — your AI-coding spend, ranked"/>
+<meta name="theme-color" content="#0a0c11"/>
+<style>${CSS}</style></head><body><div class="wrap"><div class="card">${body}
+<div class="foot"><span class="cmd"><b>npx</b> vibeaudit --compare</span>
+<span class="priv"><b>🔒 100% anonymous.</b> Only aggregate numbers are shared — never your code, prompts, file names, or IP.
+Delete anytime with <span class="num">vibeaudit --forget</span>.</span></div>
+</div></div></body></html>`;
+}
+
+function youBody(d, demo) {
+  const mix = `<div class="mix"><span class="op" style="width:${d.opus}%">Opus ${d.opus}%</span><span class="ot" style="width:${100 - d.opus}%"></span></div>
+    <div class="legend"><span><i style="background:#ff6a2b"></i>Opus ${d.opus}%</span><span><i style="background:#2a3243"></i>Everything else ${100 - d.opus}%</span></div>`;
+  return `
+  <div class="head"><span class="brand"><span class="dot"></span>vibeaudit</span><span class="tool num">Claude Code${demo ? " · demo" : ""}</span></div>
+  <div class="hero anim"><span class="badge"><span class="b-lab">Spender rank</span><span class="b-num num">TOP ${Math.max(1, 100 - d.spendPct)}%</span></span>
+    <h1>You out-spend <em>${d.spendPct}%</em> of developers.</h1>
+    <p class="sub">Ranked against <b class="num">${d.cohort.toLocaleString()}</b> devs running <span class="num">vibeaudit --compare</span></p></div>
+  <div class="tiles anim" style="animation-delay:.05s">
+    <div class="tile money"><span class="t-lab">Proj / month</span><span class="t-num num">${$(d.proj)}</span><span class="t-sub num">median ${$(d.medProj)}</span></div>
+    <div class="tile hot"><span class="t-lab">Writing code</span><span class="t-num num">${d.gen}%</span><span class="t-sub">of your tokens</span></div>
+    <div class="tile"><span class="t-lab">Re-reading</span><span class="t-num num">${d.reread}%</span><span class="t-sub">of your tokens</span></div>
+    <div class="tile"><span class="t-lab">Opus share</span><span class="t-num num">${d.opus}%</span><span class="t-sub">of your bill</span></div></div>
+  <div class="sec anim" style="animation-delay:.1s"><div class="sec-h"><h2>Where you land</h2><span class="note">◄ less · more ►</span></div>
+    ${rankTrack("Monthly spend", $(d.proj), d.spendPct)}
+    ${rankTrack("Tokens that were actual code", d.gen + "%", d.genPct)}
+    ${rankTrack("Spent re-reading context", d.reread + "%", d.rereadPct)}
+    ${rankTrack("Opus reliance", d.opus + "%", d.opusPct)}
+    ${rankTrack("Burn per active day", $(d.avgDaily), d.dayPct)}</div>
+  <div class="sec anim" style="animation-delay:.15s"><div class="sec-h"><h2>Your model mix</h2><span class="note">by cost</span></div>${mix}</div>
+  <div class="sec anim" style="animation-delay:.2s"><div class="sec-h"><h2>Monthly spend across everyone</h2><span class="note num">${d.cohort.toLocaleString()} devs</span></div>
+    <div class="hist">${histHtml(d.counts, d.youBucket)}</div></div>`;
+}
+
+function crowdBody(n, med, counts) {
+  if (n === 0) return `
+  <div class="head"><span class="brand"><span class="dot"></span>vibeaudit</span><span class="tool">the AI-spend index</span></div>
+  <div class="hero anim"><h1>See where your AI-coding<br/>spend really <em>ranks</em>.</h1>
+    <p class="sub">Run one command locally — nothing leaves your machine — then compare, 100% anonymously.</p></div>
+  <div class="sec anim" style="animation-delay:.1s"><div class="sec-h"><h2>Try it</h2></div>
+    <p style="color:var(--dim);font-size:14px;margin:0">The model is only "writing" a fraction of a percent of your tokens.
+    See your real number, and how it stacks up: <span class="num" style="color:var(--cyan)">npx vibeaudit --compare</span></p></div>`;
+  return `
+  <div class="head"><span class="brand"><span class="dot"></span>vibeaudit</span><span class="tool">the AI-spend index</span></div>
+  <div class="hero anim"><h1>How <em>${n.toLocaleString()}</em> developers spend on AI coding.</h1>
+    <p class="sub">Anonymous, self-reported from devs running <span class="num">vibeaudit --compare</span></p></div>
+  <div class="tiles anim" style="animation-delay:.05s">
+    <div class="tile"><span class="t-lab">Developers</span><span class="t-num num">${n.toLocaleString()}</span><span class="t-sub">compared</span></div>
+    <div class="tile money"><span class="t-lab">Median / month</span><span class="t-num num">${med ? $(med) : "—"}</span><span class="t-sub">projected</span></div>
+    <div class="tile hot"><span class="t-lab">The catch</span><span class="t-num num">&lt;1%</span><span class="t-sub">of tokens write code</span></div>
+    <div class="tile"><span class="t-lab">Mostly</span><span class="t-num num">Opus</span><span class="t-sub">+ re-reading</span></div></div>
+  <div class="sec anim" style="animation-delay:.15s"><div class="sec-h"><h2>Projected monthly spend — distribution</h2><span class="note num">${n.toLocaleString()} devs</span></div>
+    <div class="hist">${histHtml(counts, -1)}</div></div>`;
 }
 
 console.log(`vibeaudit compare server on :${PORT} (db ${DB_PATH})`);
