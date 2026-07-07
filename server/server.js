@@ -27,15 +27,27 @@ const upsert = db.prepare(`INSERT INTO subs
     spanDays=$spanDays,activeDays=$activeDays,tokTotal=$tokTotal,tokOutput=$tokOutput,tokCacheRead=$tokCacheRead,updatedAt=$updatedAt`);
 const delStmt = db.prepare("DELETE FROM subs WHERE id = ?");
 const getRow = db.prepare("SELECT * FROM subs WHERE id = ?");
+const countStmt = db.prepare("SELECT COUNT(*) AS n FROM subs");
 
 const METRICS = ["projectedUsd", "genPct", "rereadPct", "opusSharePct", "avgDailyUsd"];
+const ID_RE = /^[A-Za-z0-9._-]{8,64}$/;   // anon ids are uuids; reject anything else
+const COHORT_TTL_MS = 30_000;              // cache the full-table scan so /submit can't DoS it
+const MAX_ROWS = 500_000;                  // hard ceiling on distinct submissions
 const num = (v, lo = 0, hi = 1e12) => { const n = Number(v); return isFinite(n) ? Math.max(lo, Math.min(hi, n)) : 0; };
 
-function cohortValues() {
+// Cohort values. Cached for read paths (pages/stats — the DoS surface); force=true
+// recomputes so a submitter always sees themselves in the fresh cohort.
+// Callers are read-only and must not mutate the returned arrays.
+let _cohort = null, _cohortAt = 0;
+function cohortValues(force = false) {
+  const now = Date.now();
+  if (!force && _cohort && now - _cohortAt < COHORT_TTL_MS) return _cohort;
   const rows = db.query("SELECT " + METRICS.join(",") + " FROM subs").all();
   const cols = {};
   for (const m of METRICS) cols[m] = rows.map((r) => r[m]).filter((v) => v != null && isFinite(v)).sort((a, b) => a - b);
-  return { n: rows.length, cols };
+  _cohort = { n: rows.length, cols };
+  _cohortAt = now;
+  return _cohort;
 }
 function pctRank(sorted, x) {
   if (!sorted.length) return null;
@@ -44,8 +56,8 @@ function pctRank(sorted, x) {
 }
 function median(sorted) { return sorted.length ? sorted[Math.floor(sorted.length / 2)] : null; }
 
-function compareFor(row) {
-  const { n, cols } = cohortValues();
+function compareFor(row, force = false) {
+  const { n, cols } = cohortValues(force);
   const pct = {}, med = {};
   for (const m of METRICS) { pct[m] = pctRank(cols[m], row[m]); med[m] = round(median(cols[m]), m.endsWith("Usd") ? 0 : 1); }
   return { cohort: n, pct, median: med };
@@ -55,7 +67,7 @@ const round = (n, d = 0) => { if (n == null) return null; const f = 10 ** d; ret
 const json = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json", "access-control-allow-origin": "*" } });
 
 function sanitize(b) {
-  if (!b || typeof b.id !== "string" || b.id.length < 8 || b.id.length > 64) return null;
+  if (!b || typeof b.id !== "string" || !ID_RE.test(b.id)) return null;
   return {
     id: b.id, tool: String(b.tool || "").slice(0, 24) || "Claude Code", plan: b.plan ? num(b.plan, 0, 100000) : null,
     totalUsd: num(b.totalUsd), monthUsd: num(b.monthUsd), projectedUsd: num(b.projectedUsd), avgDailyUsd: num(b.avgDailyUsd),
@@ -78,18 +90,21 @@ Bun.serve({
       let b; try { b = await req.json(); } catch { return json({ error: "bad json" }, 400); }
       const row = sanitize(b);
       if (!row) return json({ error: "invalid payload" }, 400);
+      // hard ceiling: allow updates to existing ids, but stop unbounded new rows (cheap COUNT, no cache priming)
+      if (!getRow.get(row.id) && countStmt.get().n >= MAX_ROWS) return json({ error: "cohort full" }, 503);
       upsert.run({ ...Object.fromEntries(Object.entries(row).map(([k, v]) => ["$" + k, v])) });
-      const cmp = compareFor(row);
+      const cmp = compareFor(row, true); // fresh cohort so the submitter sees themselves
       return json({ ...cmp, url: `${BASE}/u/${row.id}` });
     }
     if (p === "/forget" && req.method === "POST") {
       let b; try { b = await req.json(); } catch { return json({ error: "bad json" }, 400); }
-      if (b?.id) delStmt.run(String(b.id));
+      if (typeof b?.id === "string" && ID_RE.test(b.id)) delStmt.run(b.id);
       return json({ ok: true });
     }
     if (p === "/stats") return json(statsPayload());
     if (p === "/" || p.startsWith("/u/")) {
-      const id = p.startsWith("/u/") ? decodeURIComponent(p.slice(3)) : null;
+      let id = p.startsWith("/u/") ? decodeURIComponent(p.slice(3)) : null;
+      if (id && !ID_RE.test(id)) id = null; // ignore malformed ids → show crowd view
       return new Response(pageHtml(id), { headers: { "content-type": "text/html; charset=utf-8" } });
     }
     if (p === "/demo") return new Response(pageHtml(null, true), { headers: { "content-type": "text/html; charset=utf-8" } });
