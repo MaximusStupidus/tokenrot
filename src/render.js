@@ -128,7 +128,7 @@ export function render(x, meta) {
   if (meta.demo) p(`  ${c.amber("◆ demo data.")} ${c.dim("Run ")}${c.cyan("npx vibeaudit")}${c.dim(" to see your own real numbers.")}`);
   else p(`  ${c.green("🔒 100% local.")} ${c.dim("Read " + meta.fileCount.toLocaleString() + " log files on your machine. Nothing was uploaded. No account.")}`);
   p(`  ${c.dim("Costs are API-equivalent estimates — edit prices in src/pricing.js. Fable pricing is estimated.")}`);
-  p(`  ${c.gray("soon:")} ${c.dim("see if you're being throttled or overcharged vs everyone else →")} ${c.cyan("vibeaudit.dev")}`);
+  if (!meta.demo) p(`  ${c.gray("compare:")} ${c.dim("see how your spend ranks vs other devs (100% anonymous) →")} ${c.cyan("vibeaudit --compare")}`);
   p();
 
   return L.join("\n");

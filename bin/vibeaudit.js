@@ -20,6 +20,9 @@ if (has("-h") || has("--help")) {
 
   Options:
     --since <days>   only the last N days
+    --plan <usd>     your monthly plan, for value math (default 200)
+    --compare        see how you rank vs other devs (anonymous, opt-in)
+    --forget         delete your anonymous comparison data
     --json           print raw numbers as JSON (no UI)
     --no-color       plain text (or set NO_COLOR=1)
     -h, --help       this help
@@ -35,6 +38,15 @@ if (has("--demo")) {
   const { demoRecords } = await import("../src/demo.js");
   const insights = computeInsights(demoRecords());
   console.log(render(insights, { fileCount: 0, tools: ["demo"], plan: 200, demo: true }));
+  process.exit(0);
+}
+
+// --forget: delete anonymous comparison data (needs no logs)
+if (has("--forget")) {
+  const { forget } = await import("../src/compare.js");
+  const res = await forget();
+  if (res.error) console.log(`\n  ${c.yellow("Couldn't reach the server")} ${c.dim("(" + res.error + ") — your local id was cleared anyway.")}\n`);
+  else console.log(`\n  ${c.green("✓ Done.")} ${c.dim("Your anonymous data was deleted and your local id removed.")}\n`);
   process.exit(0);
 }
 
@@ -87,3 +99,19 @@ if (has("--json")) {
 
 const plan = Number(val("--plan", 200)) || 200;
 console.log(render(insights, { fileCount, tools: sources.map((s) => s.tool), plan }));
+
+// --compare: opt-in, anonymous ranking vs other devs
+if (has("--compare")) {
+  const cmp = await import("../src/compare.js");
+  const payload = cmp.buildPayload(insights, { tool: sources[0]?.tool, plan: Number(val("--plan", "")) || null });
+  process.stdout.write(cmp.showConsent(payload));
+  const yes = has("--yes") || has("-y");
+  const ans = yes ? "y" : await cmp.ask(`  ${c.bold("Upload these numbers and see where you rank?")} ${c.dim("[y/N]")} `);
+  if (ans === "y" || ans === "yes") {
+    const res = await cmp.upload(payload);
+    console.log("\n" + cmp.renderComparison(res, payload));
+  } else {
+    console.log(`\n  ${c.gray("No problem — nothing was uploaded.")}\n`);
+  }
+  process.exit(0);
+}
