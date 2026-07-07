@@ -125,7 +125,8 @@ export function render(x, meta) {
   p();
 
   // ── footer ──────────────────────────────────────────────
-  p(`  ${c.green("🔒 100% local.")} ${c.dim("Read " + meta.fileCount.toLocaleString() + " log files on your machine. Nothing was uploaded. No account.")}`);
+  if (meta.demo) p(`  ${c.amber("◆ demo data.")} ${c.dim("Run ")}${c.cyan("npx burnrate")}${c.dim(" to see your own real numbers.")}`);
+  else p(`  ${c.green("🔒 100% local.")} ${c.dim("Read " + meta.fileCount.toLocaleString() + " log files on your machine. Nothing was uploaded. No account.")}`);
   p(`  ${c.dim("Costs are API-equivalent estimates — edit prices in src/pricing.js. Fable pricing is estimated.")}`);
   p(`  ${c.gray("soon:")} ${c.dim("see if you're being throttled or overcharged vs everyone else →")} ${c.cyan("burnrate.dev")}`);
   p();

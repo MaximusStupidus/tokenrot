@@ -30,6 +30,14 @@ if (has("-h") || has("--help")) {
   process.exit(0);
 }
 
+// --demo: synthetic data, for screenshots. Never reads your logs.
+if (has("--demo")) {
+  const { demoRecords } = await import("../src/demo.js");
+  const insights = computeInsights(demoRecords());
+  console.log(render(insights, { fileCount: 0, tools: ["demo"], plan: 200, demo: true }));
+  process.exit(0);
+}
+
 const sources = discoverSources();
 if (sources.length === 0) {
   console.log(`

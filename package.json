@@ -9,6 +9,7 @@
   "files": [
     "bin",
     "src",
+    "docs/demo.svg",
     "README.md",
     "LICENSE"
   ],
@@ -17,6 +18,8 @@
   },
   "scripts": {
     "start": "node bin/burnrate.js",
+    "demo": "node bin/burnrate.js --demo",
+    "gen-demo": "node scripts/gen-demo.mjs > docs/demo.svg",
     "test": "node test/smoke.test.js"
   },
   "keywords": [
@@ -28,8 +31,18 @@
     "usage",
     "cost",
     "spend",
+    "burn-rate",
     "cli"
   ],
+  "author": "Ojas Jain",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MaximusStupidus/burnrate.git"
+  },
+  "bugs": {
+    "url": "https://github.com/MaximusStupidus/burnrate/issues"
+  },
+  "homepage": "https://github.com/MaximusStupidus/burnrate#readme",
   "dependencies": {}
 }
