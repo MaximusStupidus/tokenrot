@@ -23,6 +23,7 @@ if (has("-h") || has("--help")) {
     --plan <usd>     your monthly plan, for value math (default 200)
     --compare        see how you rank vs other devs (anonymous, opt-in)
     --forget         delete your anonymous comparison data
+    --no-fetch       skip the live price fetch, use bundled prices (offline)
     --json           print raw numbers as JSON (no UI)
     --no-color       plain text (or set NO_COLOR=1)
     -h, --help       this help
@@ -66,6 +67,11 @@ if (sources.length === 0) {
   process.exit(0);
 }
 
+// live prices before any cost math — best-effort GET, cached locally, offline-safe.
+// sends nothing about you; falls back to cache then bundled prices.
+const { loadPrices } = await import("../src/prices.js");
+const priceInfo = await loadPrices({ offline: has("--no-fetch") || has("--offline") || !!process.env.TOKENROT_OFFLINE });
+
 // parse all files (with a light progress line to stderr)
 const sinceDays = Number(val("--since", 0));
 const cutoff = sinceDays > 0 ? Date.now() - sinceDays * 86400000 : 0;
@@ -98,7 +104,7 @@ if (has("--json")) {
 }
 
 const plan = Number(val("--plan", 200)) || 200;
-console.log(render(insights, { fileCount, tools: sources.map((s) => s.tool), plan }));
+console.log(render(insights, { fileCount, tools: sources.map((s) => s.tool), plan, prices: priceInfo }));
 
 // --compare: opt-in, anonymous ranking vs other devs
 if (has("--compare")) {

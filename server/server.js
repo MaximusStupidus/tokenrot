@@ -1,6 +1,7 @@
 // tokenrot compare server — Bun + bun:sqlite, zero external deps.
 // Stores only anonymous aggregate numbers. No accounts. No IP logging.
 import { Database } from "bun:sqlite";
+import { readFileSync } from "node:fs";
 
 const PORT = Number(process.env.PORT || 7200);
 const DB_PATH = process.env.VIBEAUDIT_DB || "./tokenrot.db";
@@ -85,6 +86,7 @@ Bun.serve({
     const p = url.pathname;
     if (req.method === "OPTIONS") return new Response(null, { headers: { "access-control-allow-origin": "*", "access-control-allow-headers": "content-type", "access-control-allow-methods": "POST,GET,OPTIONS" } });
     if (p === "/health") return json({ ok: true });
+    if (p === "/prices") return pricesResponse();
 
     if (p === "/submit" && req.method === "POST") {
       let b; try { b = await req.json(); } catch { return json({ error: "bad json" }, 400); }
@@ -111,6 +113,18 @@ Bun.serve({
     return new Response("not found", { status: 404 });
   },
 });
+
+// Live price list — served to the CLI before every cost calc. Edit prices.json to update
+// (re-read at most every 60s; no restart needed). Sends nothing about any user.
+let _prices = null, _pricesAt = 0;
+function pricesResponse() {
+  const now = Date.now();
+  if (!_prices || now - _pricesAt > 60_000) {
+    try { _prices = readFileSync(import.meta.dir + "/prices.json", "utf8"); _pricesAt = now; } catch { _prices = null; }
+  }
+  if (!_prices) return json({ error: "prices unavailable" }, 503);
+  return new Response(_prices, { headers: { "content-type": "application/json", "access-control-allow-origin": "*", "cache-control": "public, max-age=3600" } });
+}
 
 function statsPayload() {
   const { n, cols } = cohortValues();
@@ -171,9 +185,12 @@ body{margin:0;background:radial-gradient(1200px 600px at 50% -10%,#16233a 0,tran
 .hrow .hf{height:100%;background:#2b3444;border-radius:5px}
 .hrow.you .hf{background:linear-gradient(90deg,#ff6a2b,#ff8a54);box-shadow:0 0 14px rgba(255,106,43,.5)}
 .hrow .hc{width:56px;font-family:var(--mono);font-size:11.5px;color:var(--faint)}.hrow.you .hc{color:var(--ember);font-weight:700}
-.foot{margin-top:14px;padding:18px 26px 22px;border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
-.cmd{font-family:var(--mono);font-size:13px;background:#0d121c;border:1px solid var(--line2);border-radius:9px;padding:9px 13px;color:var(--txt)}.cmd b{color:var(--ember)}
-.priv{font-size:11.5px;color:var(--faint);max-width:320px}.priv b{color:var(--green)}
+.foot{margin-top:14px;padding:18px 26px 22px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:13px;background:linear-gradient(90deg,rgba(255,106,43,.06),rgba(255,106,43,0) 70%)}
+.nudge-hook{font-size:15px;color:var(--txt);font-weight:600;letter-spacing:-.01em;line-height:1.35}
+.nudge-hook b{color:var(--amber)}.nudge-hook .send{color:var(--ember);font-weight:700;white-space:nowrap}
+.foot-cta{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.cmd{font-family:var(--mono);font-size:15px;font-weight:700;background:#0d121c;border:1px solid var(--line2);border-radius:9px;padding:10px 15px;color:var(--txt)}.cmd b{color:var(--ember)}
+.priv{font-size:11.5px;color:var(--faint);max-width:340px}.priv b{color:var(--green)}
 .anim{opacity:0;transform:translateY(10px);animation:rise .6s cubic-bezier(.16,1,.3,1) forwards}
 @keyframes rise{to{opacity:1;transform:none}}
 @media(prefers-reduced-motion:reduce){.anim{animation:none;opacity:1;transform:none}}
@@ -220,15 +237,20 @@ function pageHtml(focusId, demo = false) {
   }
 
   const body = d ? youBody(d, demo) : crowdBody(n, med, counts);
+  const hook = d
+    ? (d.spendPct >= 55
+        ? `You out-burn <b>${d.spendPct}% of developers.</b> Most have no idea what their AI coding costs.`
+        : `You're leaner than <b>${Math.max(1, 100 - d.spendPct)}% of developers.</b> Quietly winning.`)
+    : `See where your AI-coding spend really ranks.`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>tokenrot — your AI-coding spend, ranked</title>
 <meta property="og:title" content="tokenrot — your AI-coding spend, ranked"/>
 <meta name="theme-color" content="#0a0c11"/>
 <style>${CSS}</style></head><body><div class="wrap"><div class="card">${body}
-<div class="foot"><span class="cmd"><b>npx</b> tokenrot --compare</span>
-<span class="priv"><b>🔒 100% anonymous.</b> Only aggregate numbers are shared — never your code, prompts, file names, or IP.
-Delete anytime with <span class="num">tokenrot --forget</span>.</span></div>
+<div class="foot"><div class="nudge-hook">${hook} <span class="send">Send them the receipt →</span></div>
+<div class="foot-cta"><span class="cmd"><b>npx</b> tokenrot</span>
+<span class="priv">anonymous · nothing leaves your machine · <span class="num">tokenrot --forget</span> to delete</span></div></div>
 </div></div></body></html>`;
 }
 

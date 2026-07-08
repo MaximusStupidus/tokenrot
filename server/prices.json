@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "updated": "2026-07-08",
+  "currency": "usd_per_million_tokens",
+  "models": {
+    "opus":    { "in": 15,  "out": 75 },
+    "sonnet":  { "in": 3,   "out": 15 },
+    "haiku":   { "in": 0.8, "out": 4 },
+    "fable":   { "in": 6,   "out": 30, "est": true },
+    "gpt":     { "in": 1.25, "out": 10 },
+    "default": { "in": 3,   "out": 15, "est": true }
+  },
+  "cache": { "read": 0.1, "write5m": 1.25, "write1h": 2.0 },
+  "webSearchPer1k": 10
+}

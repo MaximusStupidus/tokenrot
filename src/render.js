@@ -126,8 +126,13 @@ export function render(x, meta) {
 
   // ── footer ──────────────────────────────────────────────
   if (meta.demo) p(`  ${c.amber("◆ demo data.")} ${c.dim("Run ")}${c.cyan("npx tokenrot")}${c.dim(" to see your own real numbers.")}`);
-  else p(`  ${c.green("🔒 100% local.")} ${c.dim("Read " + meta.fileCount.toLocaleString() + " log files on your machine. Nothing was uploaded. No account.")}`);
-  p(`  ${c.dim("Costs are API-equivalent estimates — edit prices in src/pricing.js. Fable pricing is estimated.")}`);
+  else p(`  ${c.green("🔒 Local.")} ${c.dim("Read " + meta.fileCount.toLocaleString() + " log files on your machine — your code & usage never left it. No account.")}`);
+  const pr = meta.prices || {};
+  const priceLine =
+    pr.source === "live" ? c.dim(`Prices: live${pr.updated ? ", updated " + pr.updated : ""}.`)
+    : pr.source === "cache" ? c.dim(`Prices: cached${pr.updated ? " from " + pr.updated : ""} (offline).`)
+    : c.dim("Prices: bundled fallback (offline).");
+  p(`  ${c.dim("Costs are API-equivalent estimates.")} ${priceLine}`);
   if (!meta.demo) p(`  ${c.gray("compare:")} ${c.dim("see how your spend ranks vs other devs (100% anonymous) →")} ${c.cyan("tokenrot --compare")}`);
   p();
 
