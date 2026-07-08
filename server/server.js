@@ -109,6 +109,8 @@ Bun.serve({
     if (req.method === "OPTIONS") return new Response(null, { headers: { "access-control-allow-origin": "*", "access-control-allow-headers": "content-type", "access-control-allow-methods": "POST,GET,OPTIONS" } });
     if (p === "/health") return json({ ok: true });
     if (p === "/prices") return pricesResponse();
+    if (p === "/favicon.svg" || p === "/favicon.ico") return new Response(FAVICON_SVG, { headers: { "content-type": "image/svg+xml", "cache-control": "public, max-age=86400" } });
+    if (p === "/robots.txt") return new Response("User-agent: *\nAllow: /\n", { headers: { "content-type": "text/plain" } });
 
     if (p === "/submit" && req.method === "POST") {
       let b; try { b = await req.json(); } catch { return json({ error: "bad json" }, 400); }
@@ -171,6 +173,9 @@ function pricesResponse() {
    reserved for data. No glow, no gradients, no decoration without meaning.
    ══════════════════════════════════════════════════════════════════════ */
 
+// Brand mark: a token meter rotting left-to-right — two ash bars, one ember survivor.
+const FAVICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="13" fill="#0a0c10"/><rect x="11" y="30" width="11" height="23" rx="2.5" fill="#39414f"/><rect x="26.5" y="21" width="11" height="32" rx="2.5" fill="#6b4a2c"/><rect x="42" y="11" width="11" height="42" rx="2.5" fill="#d5813c"/></svg>`;
+
 const CSS = `
 :root{
   --bg:#0a0c10;--surface:#0e1118;--raise:#12161f;--line:#1c222c;--hair:#161b23;
@@ -195,13 +200,18 @@ b{font-weight:600;color:var(--ink2)}
 .top .meta{font-size:11px;color:var(--dim);display:flex;align-items:center;gap:8px}
 .top .live{width:6px;height:6px;border-radius:50%;background:var(--green)}
 
-/* hero */
-.hero{padding:26px 18px 22px;border-bottom:1px solid var(--hair)}
+/* hero — carries the 3D token-decay field behind the text */
+.hero{position:relative;overflow:hidden;padding:30px 18px 26px;border-bottom:1px solid var(--hair);min-height:158px;
+  display:flex;flex-direction:column;justify-content:center}
+.hero>*{position:relative;z-index:1}
+canvas.viz{position:absolute;inset:0;z-index:0;width:100%;height:100%;pointer-events:none;opacity:.6;
+  -webkit-mask-image:radial-gradient(130% 110% at 32% 42%,#000 26%,transparent 80%);
+  mask-image:radial-gradient(130% 110% at 32% 42%,#000 26%,transparent 80%)}
 .kicker{font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--faint);margin-bottom:8px}
 .hero h1{font-family:var(--sans);font-size:clamp(21px,4.6vw,27px);font-weight:800;letter-spacing:-.025em;
-  margin:0;color:var(--ink2);line-height:1.15;text-wrap:balance}
+  margin:0;color:var(--ink2);line-height:1.15;text-wrap:balance;text-shadow:0 1px 8px rgba(10,12,16,.9)}
 .hero h1 em{font-style:normal;color:var(--accent)}
-.hero .sub{margin:9px 0 0;color:var(--dim);font-size:12.5px}
+.hero .sub{margin:9px 0 0;color:var(--dim);font-size:12.5px;text-shadow:0 1px 6px rgba(10,12,16,.9)}
 
 /* stats strip */
 .strip{display:grid;grid-template-columns:repeat(3,1fr);border-bottom:1px solid var(--hair)}
@@ -305,16 +315,21 @@ b{font-weight:600;color:var(--ink2)}
   font-family:var(--sans);font-size:13px;color:var(--ink)}
 .claim b{color:var(--accent)}
 
-/* cta + copy */
-.cta{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+/* cta + button system */
+.cta{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
   padding:16px 18px;border-top:1px solid var(--line)}
-.cmdline{display:flex;align-items:center;gap:10px}
+.cmdline{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .cmd{font-size:14.5px;font-weight:700;color:var(--ink2)}
 .cmd .p{color:var(--faint);font-weight:400}.cmd .n{color:var(--accent)}
-.copy{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);
-  background:var(--raise);border:1px solid var(--line);border-radius:5px;padding:4px 9px;cursor:pointer}
-.copy:hover{color:var(--ink2);border-color:var(--accent-dim)}
-.copy:focus-visible{outline:1px solid var(--accent)}
+.btn{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+  border-radius:6px;padding:8px 14px;cursor:pointer;border:1px solid var(--line);
+  background:var(--raise);color:var(--ink);transition:border-color .12s,background .12s,color .12s}
+.btn:hover{color:var(--ink2);border-color:var(--accent-dim)}
+.btn:active{transform:translateY(1px)}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#14100a;font-weight:700}
+.btn.primary:hover{background:#e39250;border-color:#e39250;color:#14100a}
+a.btn{display:inline-block;text-decoration:none}
 .hook{font-family:var(--sans);font-size:12.5px;color:var(--dim);max-width:34ch;text-align:right}
 .hook b{color:var(--ink2)}
 
@@ -340,9 +355,10 @@ const JS = `
   });
   // copy npx command
   document.querySelectorAll('.copy').forEach(function(b){
+    var orig = b.textContent;
     b.addEventListener('click', function(){
       navigator.clipboard.writeText('npx tokenrot').then(function(){
-        b.textContent='copied'; setTimeout(function(){ b.textContent='copy'; },1200);
+        b.textContent='copied ✓'; setTimeout(function(){ b.textContent=orig; },1400);
       }).catch(function(){});
     });
   });
@@ -350,8 +366,8 @@ const JS = `
   var lb = document.querySelector('.lb');
   document.querySelectorAll('.tab').forEach(function(tab){
     tab.addEventListener('click', function(){
-      document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('on'); });
-      tab.classList.add('on');
+      document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('on'); t.setAttribute('aria-pressed','false'); });
+      tab.classList.add('on'); tab.setAttribute('aria-pressed','true');
       var k = tab.getAttribute('data-k');
       var rows = Array.from(lb.querySelectorAll('.lb-row'));
       rows.sort(function(a,b){ return (+b.getAttribute('data-'+k)||0) - (+a.getAttribute('data-'+k)||0); });
@@ -367,6 +383,65 @@ const JS = `
       var nb = doc.querySelector('.lb'); if (nb) lb.innerHTML = nb.innerHTML;
     }).catch(function(){});
   }, 60000);
+})();
+`;
+
+// ── the 3D signature: a token-decay field ───────────────────────────
+// Tokens stream through the context window ember-bright, rot to ash as they age
+// (the re-read share), while the rare survivors — the % that became real code —
+// stay lit and drift upward. Parameterized per page by real numbers via __VIZ.
+// One THREE.Points draw call; paused when hidden; static frame under reduced motion.
+const VIZ_JS = `
+(function(){
+  if(!window.THREE) return;
+  var cv=document.querySelector('canvas.viz'); if(!cv) return;
+  var rm=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var P=window.__VIZ||{gen:1,reread:92};
+  var W=cv.clientWidth||600,H=cv.clientHeight||160,renderer;
+  try{renderer=new THREE.WebGLRenderer({canvas:cv,alpha:true,antialias:false});}catch(e){return;}
+  renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));renderer.setSize(W,H,false);
+  var scene=new THREE.Scene();
+  var cam=new THREE.PerspectiveCamera(55,W/H,.1,100);cam.position.z=15;
+  var N=(innerWidth<600?1600:3800);
+  var surv=Math.max(.012,(P.gen||1)/100*1.4);      // fraction that stays lit
+  var rot=Math.min(1,(P.reread||90)/100);          // how fast the rest decays
+  var geo=new THREE.BufferGeometry();
+  var pos=new Float32Array(N*3),col=new Float32Array(N*3),meta=new Array(N);
+  var ember=new THREE.Color('#d5813c'),bright=new THREE.Color('#ffb56b'),ash=new THREE.Color('#20262f');
+  function reset(i,init){
+    pos[i*3]=init?(Math.random()*44-22):(22+Math.random()*6);
+    pos[i*3+1]=(Math.random()-.5)*9; pos[i*3+2]=(Math.random()-.5)*7;
+    meta[i]={v:.015+Math.random()*.032,s:Math.random()<surv,a:init?Math.random():0,w:Math.random()*6.28};
+  }
+  for(var i=0;i<N;i++)reset(i,true);
+  geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  geo.setAttribute('color',new THREE.BufferAttribute(col,3));
+  scene.add(new THREE.Points(geo,new THREE.PointsMaterial({size:.085,vertexColors:true,transparent:true,opacity:.95,depthWrite:false,blending:THREE.AdditiveBlending})));
+  var mx=0,my=0;
+  addEventListener('pointermove',function(e){mx=e.clientX/innerWidth-.5;my=e.clientY/innerHeight-.5;},{passive:true});
+  var c=new THREE.Color();
+  function tick(t){
+    for(var i=0;i<N;i++){
+      var m=meta[i];
+      pos[i*3]-=m.v;
+      pos[i*3+1]+=Math.sin(t*.0006+m.w)*.0035+(m.s?.007:0);
+      m.a+=m.v/40;
+      if(pos[i*3]<-23)reset(i,false);
+      if(m.s)c.copy(bright);else c.copy(ember).lerp(ash,Math.pow(Math.min(1,m.a),.6)*rot+(1-rot)*.2);
+      col[i*3]=c.r;col[i*3+1]=c.g;col[i*3+2]=c.b;
+    }
+    geo.attributes.position.needsUpdate=true;geo.attributes.color.needsUpdate=true;
+    cam.position.x+=(mx*1.5-cam.position.x)*.04;
+    cam.position.y+=(-my*.9-cam.position.y)*.04;
+    cam.lookAt(0,0,0);
+    renderer.render(scene,cam);
+  }
+  if(rm){tick(400);renderer.render(scene,cam);return;}
+  var run=true;
+  document.addEventListener('visibilitychange',function(){run=!document.hidden;});
+  (function loop(t){requestAnimationFrame(loop);if(run)tick(t);})(0);
+  addEventListener('resize',function(){W=cv.clientWidth;H=cv.clientHeight;if(!W||!H)return;
+    renderer.setSize(W,H,false);cam.aspect=W/H;cam.updateProjectionMatrix();},{passive:true});
 })();
 `;
 
@@ -435,27 +510,44 @@ function tipsHtml(d) {
     tips.slice(0, 3).map(([h, s]) => `<div class="tip"><div class="th">${h}</div><div class="ts">${s}</div></div>`).join("") + `</div>`;
 }
 
-function shell({ title, ogDesc, body, metaRight }) {
+function shell({ title, ogDesc, body, metaRight, path = "/", viz = null }) {
+  const canonical = BASE + path;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>${title}</title>
+<link rel="canonical" href="${canonical}"/>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
+<link rel="mask-icon" href="/favicon.svg" color="#d5813c"/>
+<meta property="og:type" content="website"/>
+<meta property="og:site_name" content="tokenrot"/>
+<meta property="og:url" content="${canonical}"/>
 <meta property="og:title" content="${title}"/>
 <meta property="og:description" content="${ogDesc}"/>
+<meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="${title}"/>
+<meta name="twitter:description" content="${ogDesc}"/>
 <meta name="description" content="${ogDesc}"/>
 <meta name="theme-color" content="#0a0c10"/>
 <style>${CSS}</style></head><body><div class="wrap"><div class="sheet">
-<div class="top"><a class="id" href="/">TOKEN<b>ROT</b></a><span class="meta">${metaRight}</span></div>
+<header class="top"><a class="id" href="/" aria-label="tokenrot home">TOKEN<b>ROT</b></a><span class="meta">${metaRight}</span></header>
 ${body}
-<div class="trust"><span><span class="g">●</span> local-first · anonymous · no accounts · no IPs stored</span>
-<span><a href="https://github.com/MaximusStupidus/tokenrot">source</a> · <a href="/prices">live prices</a> · <a href="https://github.com/MaximusStupidus/tokenrot/blob/main/docs/PRIVACY.md">privacy</a></span></div>
-</div></div><script>${JS}</script></body></html>`;
+<footer class="trust"><span><span class="g">●</span> local-first · anonymous · no accounts · no IPs stored</span>
+<span><a href="https://github.com/MaximusStupidus/tokenrot">source</a> · <a href="/prices">live prices</a> · <a href="https://github.com/MaximusStupidus/tokenrot/blob/main/docs/PRIVACY.md">privacy</a></span></footer>
+</div></div>
+<script>window.__VIZ=${JSON.stringify(viz || { gen: 1.2, reread: 92 })}</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" defer></script>
+<script>${JS}
+window.addEventListener('load',function(){${VIZ_JS}});</script></body></html>`;
 }
 
 const ctaHtml = (hook) => `
 <div class="cta">
-  <div class="cmdline"><span class="cmd"><span class="p">$</span> npx <span class="n">tokenrot</span></span><button class="copy" type="button">copy</button></div>
+  <div class="cmdline"><span class="cmd"><span class="p">$</span> npx <span class="n">tokenrot</span></span>
+    <button class="btn primary copy" type="button" aria-label="Copy the command npx tokenrot">copy command</button>
+    <a class="btn" href="https://github.com/MaximusStupidus/tokenrot" aria-label="View the source on GitHub">view source</a></div>
   <div class="hook">${hook}</div>
 </div>`;
+const VIZ_CANVAS = `<canvas class="viz" aria-hidden="true"></canvas>`;
 
 function pageHtml(focusId, demo = false, wantedHandle = null) {
   const { n, cols } = cohortValues();
@@ -488,6 +580,8 @@ function pageHtml(focusId, demo = false, wantedHandle = null) {
       title: `${who} · ${$(d.proj)}/mo AI-coding burn · tokenrot`,
       ogDesc: `${Math.round(d.reread)}% of tokens re-read context, ${d.gen}% wrote code, Opus ${Math.round(d.opus)}% of the bill — ranked vs ${d.cohort.toLocaleString()} devs.`,
       metaRight: `${demo ? "demo · " : ""}<span class="num">${d.cohort.toLocaleString()}</span>&nbsp;devs on the board`,
+      path: demo ? "/demo" : d.handle ? "/@" + d.handle : "/",
+      viz: { gen: d.gen, reread: d.reread },
       body: youBody(d) + ctaHtml(hook),
     });
   }
@@ -497,6 +591,8 @@ function pageHtml(focusId, demo = false, wantedHandle = null) {
     title: "tokenrot — the AI-spend leaderboard",
     ogDesc: n > 0 ? `${n.toLocaleString()} anonymous devs ranked by AI-coding burn. Median ${$(med)}/mo.` : "Find out what your AI coding actually costs — and where you rank. 100% local, anonymous.",
     metaRight: `<span class="live"></span> <span class="num" data-n="${n}">${n.toLocaleString()}</span>&nbsp;devs`,
+    path: "/",
+    viz: { gen: median(cols.genPct) ?? 1.2, reread: median(cols.rereadPct) ?? 92 },
     body: (n > 0 ? boardBody(n, med, counts, totalBurn, wantedHandle) : emptyBody()) + ctaHtml(`Anonymous handle, public rank, <b>zero code leaves your machine.</b>`),
   });
 }
@@ -513,7 +609,7 @@ function boardBody(n, med, counts, totalBurn, missing) {
       <span class="lb-burn num">${$(r.projectedUsd)}<i>/mo</i></span>
     </a>`).join("");
   return `
-  <div class="hero"><div class="kicker">The AI-spend leaderboard</div>
+  <div class="hero">${VIZ_CANVAS}<div class="kicker">The AI-spend leaderboard</div>
     <h1>Who's burning the most<br/>on AI coding?</h1>
     ${missing ? `<p class="sub">No dev named <b>@${missing}</b> on the board (yet) — here's everyone who is.</p>` : ""}
   </div>
@@ -524,9 +620,9 @@ function boardBody(n, med, counts, totalBurn, missing) {
   </div>
   <div class="lab"><span>Rankings</span><span class="r">top 100 · live</span></div>
   <div class="tabs">
-    <button class="tab on" type="button" data-k="burn">$ burn</button>
-    <button class="tab" type="button" data-k="reread">% re-read</button>
-    <button class="tab" type="button" data-k="opus">% opus</button>
+    <button class="tab on" type="button" data-k="burn" aria-pressed="true">$ burn</button>
+    <button class="tab" type="button" data-k="reread" aria-pressed="false">% re-read</button>
+    <button class="tab" type="button" data-k="opus" aria-pressed="false">% opus</button>
   </div>
   <div class="lb">${tr}</div>
   <div class="lab"><span>Spend distribution</span><span class="r num">${n.toLocaleString()} devs</span></div>
@@ -540,7 +636,7 @@ function emptyBody() {
       <span class="lb-scale"><span class="ax"></span></span>
       <span class="lb-burn num">$&thinsp;—<i>/mo</i></span></div>`).join("");
   return `
-  <div class="hero"><div class="kicker">The AI-spend leaderboard</div>
+  <div class="hero">${VIZ_CANVAS}<div class="kicker">The AI-spend leaderboard</div>
     <h1>What does your AI coding<br/><em>actually</em> cost?</h1>
     <p class="sub">One command. Reads your local logs — nothing leaves your machine — then shows the truth.</p>
   </div>
@@ -560,7 +656,7 @@ function youBody(d) {
   const mix = `<div class="mixbar"><i style="width:${d.opus}%;background:var(--accent)"></i><i style="width:${100 - d.opus}%;background:#2b323f"></i></div>
     <div class="mixleg"><span><em style="background:var(--accent)"></em>Opus ${d.opus}%</span><span><em style="background:#2b323f"></em>Everything else ${Math.round((100 - d.opus) * 10) / 10}%</span></div>`;
   return `
-  <div class="hero"><div class="kicker">Spend report · ${d.handle ? "@" + d.handle : "anonymous"}</div>
+  <div class="hero">${VIZ_CANVAS}<div class="kicker">Spend report · ${d.handle ? "@" + d.handle : "anonymous"}</div>
     <h1><span class="num">${$(d.proj)}</span><em>/mo</em> projected burn</h1>
     <p class="sub">ranked against <b class="num">${d.cohort.toLocaleString()}</b> devs · median <span class="num">${$(d.medProj)}</span>/mo</p></div>
   <div class="finds">${findingsHtml(d)}</div>
