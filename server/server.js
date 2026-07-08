@@ -11,6 +11,7 @@ const db = new Database(DB_PATH);
 db.exec("PRAGMA journal_mode = WAL;");
 db.exec(`CREATE TABLE IF NOT EXISTS subs (
   id TEXT PRIMARY KEY,
+  handle TEXT UNIQUE,
   tool TEXT, plan REAL,
   totalUsd REAL, monthUsd REAL, projectedUsd REAL, avgDailyUsd REAL,
   genPct REAL, rereadPct REAL, opusSharePct REAL, anomalyRatio REAL,
@@ -18,11 +19,33 @@ db.exec(`CREATE TABLE IF NOT EXISTS subs (
   tokTotal REAL, tokOutput REAL, tokCacheRead REAL,
   updatedAt INTEGER
 );`);
+try { db.exec("ALTER TABLE subs ADD COLUMN handle TEXT"); db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_handle ON subs(handle)"); } catch {} // existing DBs
+
+// ── anonymous public handles ─────────────────────────────────────────
+// Deterministic-ish meme name from the (secret) id. The handle is the ONLY thing
+// shown publicly; the id never appears on shared pages.
+const ADJ = ["feral","cracked","turbo","rogue","silent","caffeinated","chaotic","cozy","goated","stealth","reckless","budget","maxxed","sleepless","prompt-pilled","opus-pilled","thrifty","unhinged","zen","overclocked"];
+const NOUN = ["tokenlord","cachegoblin","contexthoarder","burnmaxxer","vibecoder","promptsmith","agentwrangler","looprunner","opusenjoyer","tokensmith","rotmaster","compactor","sessionfiend","jsonlgremlin","apiwhale"];
+function fnv(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return h; }
+const getByHandle = () => db.prepare("SELECT * FROM subs WHERE handle = ?");
+function makeHandle(id) {
+  const h = fnv(id);
+  const adj = ADJ[h % ADJ.length], noun = NOUN[(h >>> 5) % NOUN.length];
+  let num = (h >>> 16) % 100;
+  for (let i = 0; i < 200; i++) {
+    const cand = `${adj}-${noun}-${num}`;
+    const row = getByHandle().get(cand);
+    if (!row || row.id === id) return cand;
+    num = (num + 1 + i) % 1000;
+  }
+  return `${adj}-${noun}-${(Date.now() % 100000)}`;
+}
 
 const upsert = db.prepare(`INSERT INTO subs
-  (id,tool,plan,totalUsd,monthUsd,projectedUsd,avgDailyUsd,genPct,rereadPct,opusSharePct,anomalyRatio,spanDays,activeDays,tokTotal,tokOutput,tokCacheRead,updatedAt)
-  VALUES ($id,$tool,$plan,$totalUsd,$monthUsd,$projectedUsd,$avgDailyUsd,$genPct,$rereadPct,$opusSharePct,$anomalyRatio,$spanDays,$activeDays,$tokTotal,$tokOutput,$tokCacheRead,$updatedAt)
+  (id,handle,tool,plan,totalUsd,monthUsd,projectedUsd,avgDailyUsd,genPct,rereadPct,opusSharePct,anomalyRatio,spanDays,activeDays,tokTotal,tokOutput,tokCacheRead,updatedAt)
+  VALUES ($id,$handle,$tool,$plan,$totalUsd,$monthUsd,$projectedUsd,$avgDailyUsd,$genPct,$rereadPct,$opusSharePct,$anomalyRatio,$spanDays,$activeDays,$tokTotal,$tokOutput,$tokCacheRead,$updatedAt)
   ON CONFLICT(id) DO UPDATE SET
+    handle=COALESCE(subs.handle,$handle),
     tool=$tool,plan=$plan,totalUsd=$totalUsd,monthUsd=$monthUsd,projectedUsd=$projectedUsd,avgDailyUsd=$avgDailyUsd,
     genPct=$genPct,rereadPct=$rereadPct,opusSharePct=$opusSharePct,anomalyRatio=$anomalyRatio,
     spanDays=$spanDays,activeDays=$activeDays,tokTotal=$tokTotal,tokOutput=$tokOutput,tokCacheRead=$tokCacheRead,updatedAt=$updatedAt`);
@@ -93,10 +116,12 @@ Bun.serve({
       const row = sanitize(b);
       if (!row) return json({ error: "invalid payload" }, 400);
       // hard ceiling: allow updates to existing ids, but stop unbounded new rows (cheap COUNT, no cache priming)
-      if (!getRow.get(row.id) && countStmt.get().n >= MAX_ROWS) return json({ error: "cohort full" }, 503);
+      const existing = getRow.get(row.id);
+      if (!existing && countStmt.get().n >= MAX_ROWS) return json({ error: "cohort full" }, 503);
+      row.handle = existing?.handle || makeHandle(row.id);
       upsert.run({ ...Object.fromEntries(Object.entries(row).map(([k, v]) => ["$" + k, v])) });
       const cmp = compareFor(row, true); // fresh cohort so the submitter sees themselves
-      return json({ ...cmp, url: `${BASE}/u/${row.id}` });
+      return json({ ...cmp, handle: row.handle, url: `${BASE}/@${row.handle}`, board: BASE });
     }
     if (p === "/forget" && req.method === "POST") {
       let b; try { b = await req.json(); } catch { return json({ error: "bad json" }, 400); }
@@ -104,12 +129,20 @@ Bun.serve({
       return json({ ok: true });
     }
     if (p === "/stats") return json(statsPayload());
-    if (p === "/" || p.startsWith("/u/")) {
-      let id = p.startsWith("/u/") ? decodeURIComponent(p.slice(3)) : null;
-      if (id && !ID_RE.test(id)) id = null; // ignore malformed ids → show crowd view
-      return new Response(pageHtml(id), { headers: { "content-type": "text/html; charset=utf-8" } });
+    const html = (s) => new Response(s, { headers: { "content-type": "text/html; charset=utf-8" } });
+    if (p === "/") return html(pageHtml(null)); // leaderboard (or empty-state)
+    if (p.startsWith("/@")) {
+      // PUBLIC share page, addressed by anonymous handle — the secret id never appears here
+      const handle = decodeURIComponent(p.slice(2)).toLowerCase();
+      const row = /^[a-z0-9-]{3,48}$/.test(handle) ? getByHandle().get(handle) : null;
+      return html(pageHtml(row ? row.id : null));
     }
-    if (p === "/demo") return new Response(pageHtml(null, true), { headers: { "content-type": "text/html; charset=utf-8" } });
+    if (p.startsWith("/u/")) {
+      let id = decodeURIComponent(p.slice(3));
+      if (!ID_RE.test(id)) id = null;
+      return html(pageHtml(id));
+    }
+    if (p === "/demo") return html(pageHtml(null, true));
     return new Response("not found", { status: 404 });
   },
 });
@@ -191,6 +224,16 @@ body{margin:0;background:radial-gradient(1200px 600px at 50% -10%,#16233a 0,tran
 .foot-cta{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
 .cmd{font-family:var(--mono);font-size:15px;font-weight:700;background:#0d121c;border:1px solid var(--line2);border-radius:9px;padding:10px 15px;color:var(--txt)}.cmd b{color:var(--ember)}
 .priv{font-size:11.5px;color:var(--faint);max-width:340px}.priv b{color:var(--green)}
+.lb{display:flex;flex-direction:column;padding:10px 14px 4px}
+.lb-row{display:flex;align-items:center;gap:14px;padding:11px 12px;border-radius:10px;text-decoration:none;color:var(--txt);border:1px solid transparent}
+.lb-row:hover{background:#12182466;border-color:var(--line)}
+.lb-row.first{background:linear-gradient(90deg,rgba(255,106,43,.10),transparent 75%);border-color:rgba(255,106,43,.35)}
+.lb-rank{width:28px;text-align:right;color:var(--faint);font-size:13px}
+.lb-row.first .lb-rank{color:var(--ember);font-weight:800}
+.lb-handle{flex:1;font-family:var(--mono);font-size:13.5px;font-weight:600;color:var(--txt);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lb-burn{font-weight:800;color:var(--amber);font-size:14px}.lb-burn i{font-style:normal;color:var(--faint);font-size:11px;font-weight:400}
+.lb-mini{color:var(--dim);font-size:11px;width:74px;text-align:right}
+@media(max-width:560px){.lb-mini{display:none}}
 .anim{opacity:0;transform:translateY(10px);animation:rise .6s cubic-bezier(.16,1,.3,1) forwards}
 @keyframes rise{to{opacity:1;transform:none}}
 @media(prefers-reduced-motion:reduce){.anim{animation:none;opacity:1;transform:none}}
@@ -228,6 +271,7 @@ function pageHtml(focusId, demo = false) {
     if (row) {
       const cmp = compareFor(row);
       d = {
+        handle: row.handle || null,
         proj: row.projectedUsd, avgDaily: row.avgDailyUsd, gen: row.genPct, reread: row.rereadPct, opus: row.opusSharePct,
         spendPct: cmp.pct.projectedUsd ?? 50, genPct: cmp.pct.genPct ?? 50, rereadPct: cmp.pct.rereadPct ?? 50,
         opusPct: cmp.pct.opusSharePct ?? 50, dayPct: cmp.pct.avgDailyUsd ?? 50,
@@ -236,7 +280,7 @@ function pageHtml(focusId, demo = false) {
     }
   }
 
-  const body = d ? youBody(d, demo) : crowdBody(n, med, counts);
+  const body = d ? youBody(d, demo) : n > 0 ? boardBody(n, med, counts) : crowdBody(n, med, counts);
   const hook = d
     ? (d.spendPct >= 55
         ? `You out-burn <b>${d.spendPct}% of developers.</b> Most have no idea what their AI coding costs.`
@@ -254,11 +298,32 @@ function pageHtml(focusId, demo = false) {
 </div></div></body></html>`;
 }
 
+// The public leaderboard — anonymous handles only, ranked by projected burn.
+function boardBody(n, med, counts) {
+  const rows = db.query("SELECT handle, projectedUsd, genPct, rereadPct, opusSharePct FROM subs WHERE handle IS NOT NULL ORDER BY projectedUsd DESC LIMIT 100").all();
+  const tr = rows.map((r, i) => `
+    <a class="lb-row${i === 0 ? " first" : ""}" href="/@${r.handle}">
+      <span class="lb-rank num">${i + 1}</span>
+      <span class="lb-handle">${r.handle}</span>
+      <span class="lb-burn num">${$(r.projectedUsd)}<i>/mo</i></span>
+      <span class="lb-mini num">${r.genPct}% code</span>
+      <span class="lb-mini num">${Math.round(r.rereadPct)}% re-read</span>
+      <span class="lb-mini num">${Math.round(r.opusSharePct)}% opus</span>
+    </a>`).join("");
+  return `
+  <div class="head"><span class="brand"><span class="dot"></span>tokenrot</span><span class="tool">the AI-spend leaderboard</span></div>
+  <div class="hero anim"><h1>Who's burning the most<br/>on AI coding?</h1>
+    <p class="sub"><b class="num">${n.toLocaleString()}</b> anonymous devs · median <b class="num">${med ? $(med) : "—"}</b>/mo projected · run <span class="num">npx tokenrot</span> to join</p></div>
+  <div class="lb anim" style="animation-delay:.08s">${tr}</div>
+  <div class="sec anim" style="animation-delay:.15s"><div class="sec-h"><h2>Spend distribution</h2><span class="note num">${n.toLocaleString()} devs</span></div>
+    <div class="hist">${histHtml(counts, -1)}</div></div>`;
+}
+
 function youBody(d, demo) {
   const mix = `<div class="mix"><span class="op" style="width:${d.opus}%">Opus ${d.opus}%</span><span class="ot" style="width:${100 - d.opus}%"></span></div>
     <div class="legend"><span><i style="background:#ff6a2b"></i>Opus ${d.opus}%</span><span><i style="background:#2a3243"></i>Everything else ${100 - d.opus}%</span></div>`;
   return `
-  <div class="head"><span class="brand"><span class="dot"></span>tokenrot</span><span class="tool num">Claude Code${demo ? " · demo" : ""}</span></div>
+  <div class="head"><span class="brand"><span class="dot"></span>tokenrot</span><span class="tool num">${d.handle ? "@" + d.handle : "Claude Code"}${demo ? " · demo" : ""}</span></div>
   <div class="hero anim"><span class="badge"><span class="b-lab">Spender rank</span><span class="b-num num">TOP ${Math.max(1, 100 - d.spendPct)}%</span></span>
     <h1>You out-spend <em>${d.spendPct}%</em> of developers.</h1>
     <p class="sub">Ranked against <b class="num">${d.cohort.toLocaleString()}</b> devs running <span class="num">tokenrot --compare</span></p></div>
