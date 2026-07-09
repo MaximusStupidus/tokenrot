@@ -21,6 +21,12 @@ db.exec(`CREATE TABLE IF NOT EXISTS subs (
 );`);
 try { db.exec("ALTER TABLE subs ADD COLUMN handle TEXT"); db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_handle ON subs(handle)"); } catch {} // existing DBs
 
+// Mailing list + privacy-preserving visit counter (daily totals only — no ids, no IPs).
+db.exec(`CREATE TABLE IF NOT EXISTS emails (email TEXT PRIMARY KEY, ts INTEGER, source TEXT);`);
+db.exec(`CREATE TABLE IF NOT EXISTS visits (day TEXT PRIMARY KEY, n INTEGER);`);
+const subEmail = db.prepare("INSERT OR IGNORE INTO emails (email, ts, source) VALUES (?, ?, ?)");
+const bumpVisit = db.prepare("INSERT INTO visits (day, n) VALUES (?, 1) ON CONFLICT(day) DO UPDATE SET n = n + 1");
+
 // ── anonymous public handles ─────────────────────────────────────────
 // Deterministic-ish meme name from the (secret) id. The handle is the ONLY thing
 // shown publicly; the id never appears on shared pages.
@@ -130,6 +136,17 @@ Bun.serve({
       return json({ ok: true });
     }
     if (p === "/stats") return json(statsPayload());
+    if (p === "/subscribe" && req.method === "POST") {
+      let b; try { b = await req.json(); } catch { return json({ error: "bad json" }, 400); }
+      const email = String(b?.email || "").trim().toLowerCase();
+      if (!/^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,24}$/.test(email)) return json({ error: "enter a valid email" }, 400);
+      subEmail.run(email, Date.now(), String(b?.source || "site").slice(0, 24));
+      return json({ ok: true });
+    }
+    if (p === "/visit" && req.method === "POST") {
+      bumpVisit.run(new Date().toISOString().slice(0, 10)); // daily count only — nothing about the visitor
+      return json({ ok: true });
+    }
     const html = (s) => new Response(s, { headers: { "content-type": "text/html; charset=utf-8" } });
     if (p === "/") return html(pageHtml(null)); // leaderboard (or empty-state)
     if (p.startsWith("/@")) {
@@ -168,9 +185,12 @@ function pricesResponse() {
 }
 
 /* ══════════════════════════════════════════════════════════════════════
-   PRESENTATION — "precision instrument" design language.
-   Monospace voice, tabular numbers, hairline rules, one muted ember accent
-   reserved for data. No glow, no gradients, no decoration without meaning.
+   PRESENTATION — full-page "terminal display" design.
+   Benchmarked against Linear/Vercel/Stripe/Warp/Bun-class dev-tool sites:
+   sticky slim nav → full-bleed hero with giant monospace display type over
+   the token-decay field → the board as the product → how-it-works → email
+   capture → rich footer. One ember accent; contrast turned up; monospace IS
+   the display face (terminal-native — that's the signature).
    ══════════════════════════════════════════════════════════════════════ */
 
 // Brand mark: a token meter rotting left-to-right — two ash bars, one ember survivor.
@@ -178,176 +198,227 @@ const FAVICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"
 
 const CSS = `
 :root{
-  --bg:#0a0c10;--surface:#0e1118;--raise:#12161f;--line:#1c222c;--hair:#161b23;
-  --ink:#c9ced7;--ink2:#eef1f6;--dim:#727a86;--faint:#464d58;
-  --accent:#d5813c;--accent-dim:#7a5230;--green:#6aa588;--red:#c96a5f;
+  --bg:#08090d;--surface:#0d1016;--raise:#131722;--line:#20263250;--line2:#242c3a;--hair:#171c26;
+  --ink:#cfd4dd;--ink2:#f2f4f8;--dim:#97a0b0;--faint:#5d6675;
+  --accent:#e08a43;--accent-hot:#ff9d52;--accent-dim:#8a5a30;--green:#6aa588;--red:#c96a5f;
   --mono:"SF Mono",SFMono-Regular,ui-monospace,Menlo,Consolas,"Liberation Mono",monospace;
   --sans:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono);font-size:13px;line-height:1.55;
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono);font-size:13.5px;line-height:1.6;
   -webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
 a{color:inherit;text-decoration:none}
-.wrap{max-width:680px;margin:0 auto;padding:36px 18px 56px}
-.sheet{background:var(--surface);border:1px solid var(--line);border-radius:8px;overflow:hidden}
 .num{font-variant-numeric:tabular-nums}
-b{font-weight:600;color:var(--ink2)}
+b{font-weight:700;color:var(--ink2)}
 .q{color:var(--dim)}
+.container{max-width:1060px;margin:0 auto;padding:0 22px}
+.narrow{max-width:860px;margin:0 auto;padding:0 22px}
 
-/* header — instrument stamp */
-.top{display:flex;justify-content:space-between;align-items:center;padding:13px 18px;border-bottom:1px solid var(--line)}
-.top .id{letter-spacing:.34em;font-weight:600;color:var(--ink2);font-size:12px}
-.top .id b{color:var(--accent)}
-.top .meta{font-size:11px;color:var(--dim);display:flex;align-items:center;gap:8px}
-.top .live{width:6px;height:6px;border-radius:50%;background:var(--green)}
+/* ── nav ── */
+.nav{position:sticky;top:0;z-index:50;background:rgba(8,9,13,.82);backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--hair)}
+.nav-in{max-width:1060px;margin:0 auto;padding:0 22px;height:56px;display:flex;align-items:center;gap:26px}
+.brand{letter-spacing:.3em;font-weight:700;color:var(--ink2);font-size:13px}
+.brand b{color:var(--accent)}
+.nav-links{display:flex;gap:20px;flex:1;font-size:12px;color:var(--dim)}
+.nav-links a:hover{color:var(--ink2)}
+.nav-links a.on{color:var(--ink2)}
+@media(max-width:620px){.nav-links{gap:14px}}
 
-/* hero — carries the 3D token-decay field behind the text */
-.hero{position:relative;overflow:hidden;padding:34px 18px 30px;border-bottom:1px solid var(--hair);min-height:228px;
-  display:flex;flex-direction:column;justify-content:center;background:#090b0f}
-.hero>*{position:relative;z-index:1}
-canvas.viz{position:absolute;inset:0;z-index:0;width:100%;height:100%;pointer-events:none;opacity:1;
-  -webkit-mask-image:linear-gradient(180deg,#000 0%,#000 78%,transparent 100%);
-  mask-image:linear-gradient(180deg,#000 0%,#000 78%,transparent 100%)}
-.kicker{font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--faint);margin-bottom:8px}
-.hero h1{font-family:var(--sans);font-size:clamp(22px,4.8vw,29px);font-weight:800;letter-spacing:-.025em;
-  margin:0;color:var(--ink2);line-height:1.15;text-wrap:balance;
-  text-shadow:0 0 14px rgba(9,11,15,.95),0 2px 22px rgba(9,11,15,.9)}
-.hero h1 em{font-style:normal;color:var(--accent)}
-.hero .sub{margin:9px 0 0;color:var(--ink);font-size:12.5px;text-shadow:0 0 12px rgba(9,11,15,.95),0 2px 16px rgba(9,11,15,.9)}
-
-/* stats strip */
-.strip{display:grid;grid-template-columns:repeat(3,1fr);border-bottom:1px solid var(--hair)}
-.cell{padding:15px 18px;border-right:1px solid var(--hair)}
-.cell:last-child{border-right:0}
-.cell .k{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
-.cell .v{font-size:21px;font-weight:600;color:var(--ink2);letter-spacing:-.02em;margin-top:3px}
-.cell .v.money{color:var(--accent)}
-.cell .s{font-size:10.5px;color:var(--faint);margin-top:1px}
-
-/* section labels */
-.lab{padding:16px 18px 8px;font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--faint);
-  display:flex;justify-content:space-between;align-items:baseline}
-.lab .r{letter-spacing:.02em;text-transform:none}
-
-/* sort tabs */
-.tabs{display:flex;gap:2px;padding:0 18px 10px}
-.tab{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);
-  background:none;border:1px solid var(--hair);border-radius:5px;padding:4px 10px;cursor:pointer}
-.tab:hover{color:var(--ink);border-color:var(--line)}
-.tab.on{color:var(--accent);border-color:var(--accent-dim)}
-
-/* leaderboard */
-.lb{padding:2px 10px 14px}
-.lb-row{display:grid;grid-template-columns:30px minmax(0,1fr) 96px 120px;gap:10px;align-items:center;
-  padding:9px 8px;border-radius:6px;transition:background .12s}
-.lb-row:hover{background:var(--raise)}
-.lb-rank{text-align:right;color:var(--faint);font-size:12px}
-.lb-row.r1 .lb-rank,.lb-row.r2 .lb-rank,.lb-row.r3 .lb-rank{color:var(--accent);font-weight:700}
-.lb-who{min-width:0}
-.lb-handle{font-size:13px;font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
-.lb-row:hover .lb-handle{color:var(--ink2)}
-.lb-ago{font-size:10px;color:var(--faint)}
-.lb-burn{text-align:right;font-weight:700;color:var(--accent);font-size:13.5px}
-.lb-burn i{font-style:normal;color:var(--faint);font-size:10px;font-weight:400}
-.lb-scale{position:relative;height:20px}
-.lb-scale .ax{position:absolute;top:10px;left:0;right:0;height:1px;background:var(--hair)}
-.lb-scale .fill{position:absolute;top:9px;left:0;height:3px;background:var(--accent-dim);border-radius:2px}
-.lb-row.r1 .lb-scale .fill{background:var(--accent)}
-@media(max-width:540px){.lb-row{grid-template-columns:26px minmax(0,1fr) 90px}.lb-scale{display:none}}
-
-/* findings (card pages) */
-.finds{padding:4px 18px}
-.f{display:grid;grid-template-columns:74px 1fr;gap:15px;align-items:baseline;padding:14px 0;border-bottom:1px solid var(--hair)}
-.f:last-child{border-bottom:0}
-.f .fm{font-size:24px;font-weight:600;letter-spacing:-.02em;color:var(--accent);line-height:1;text-align:right}
-.f .ft{font-family:var(--sans);font-size:14px;line-height:1.5;color:var(--ink)}
-
-/* measurement scales */
-.meas{padding:0 18px 8px}
-.m{padding:11px 0;border-bottom:1px solid var(--hair)}
-.m:last-child{border-bottom:0}
-.m .mh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
-.m .name{color:var(--ink);font-size:12px}
-.m .vals{display:flex;gap:12px;align-items:baseline}
-.m .v{color:var(--ink2);font-weight:600;font-size:12.5px}
-.m .pc{color:var(--dim);font-size:11px;width:66px;text-align:right}
-.m .pc b{color:var(--accent)}
-.scale{position:relative;height:20px}
-.scale .axis{position:absolute;top:10px;left:0;right:0;height:1px;background:var(--line)}
-.scale .tick{position:absolute;top:6px;width:1px;height:5px;background:var(--hair)}
-.scale .med{position:absolute;top:5px;width:7px;height:7px;background:var(--surface);border:1px solid var(--dim);transform:translate(-50%,0) rotate(45deg)}
-.scale .you{position:absolute;top:10px;transform:translateX(-50%)}
-.scale .you .cap{position:absolute;left:50%;top:-4px;transform:translateX(-50%);width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:7px solid var(--accent)}
-.scale .you .stem{position:absolute;left:50%;top:2px;transform:translateX(-50%);width:1px;height:8px;background:var(--accent)}
-
-/* model mix */
-.mix{padding:2px 18px 16px}
-.mixbar{display:flex;height:8px;border-radius:2px;overflow:hidden;background:var(--raise)}
-.mixbar i{display:block;height:100%}
-.mixleg{display:flex;gap:20px;margin-top:10px;font-size:11px;color:var(--dim)}
-.mixleg em{font-style:normal;display:inline-block;width:8px;height:8px;border-radius:1px;margin-right:6px;vertical-align:middle}
-
-/* tips */
-.tips{padding:2px 18px 14px}
-.tip{padding:10px 0;border-bottom:1px solid var(--hair)}
-.tip:last-child{border-bottom:0}
-.tip .th{font-family:var(--sans);font-size:13.5px;color:var(--ink2);font-weight:600}
-.tip .th s{text-decoration:none;color:var(--green)}
-.tip .ts{font-family:var(--sans);font-size:12px;color:var(--dim);margin-top:2px}
-
-/* histogram */
-.dist{padding:2px 18px 16px}
-.d{display:flex;align-items:center;gap:12px;padding:3px 0}
-.d .dl{width:72px;text-align:right;color:var(--dim);font-size:11px}
-.d .dt{flex:1;height:8px;background:var(--raise);border-radius:2px;overflow:hidden}
-.d .df{height:100%;background:#2b323f}
-.d.you .df{background:var(--accent)}
-.d .dc{width:40px;color:var(--faint);font-size:11px}
-.d.you .dc{color:var(--accent)}
-
-/* terminal demo (empty state) */
-.term{margin:14px 18px 4px;background:#07090d;border:1px solid var(--line);border-radius:7px;padding:14px 16px;
-  font-size:12px;line-height:1.75;overflow-x:auto}
-.term .p{color:var(--faint)} .term .c{color:var(--ink2)} .term .a{color:var(--accent)} .term .g{color:var(--green)} .term .d{color:var(--dim)}
-.term .bar{color:var(--accent-dim)}
-
-/* ghost rows (empty board) */
-.ghost{opacity:.32;pointer-events:none}
-.claim{margin:6px 18px 14px;border:1px dashed var(--accent-dim);border-radius:7px;padding:12px 16px;
-  font-family:var(--sans);font-size:13px;color:var(--ink)}
-.claim b{color:var(--accent)}
-
-/* cta + button system */
-.cta{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
-  padding:16px 18px;border-top:1px solid var(--line)}
-.cmdline{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-.cmd{font-size:14.5px;font-weight:700;color:var(--ink2)}
-.cmd .p{color:var(--faint);font-weight:400}.cmd .n{color:var(--accent)}
-.btn{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
-  border-radius:6px;padding:8px 14px;cursor:pointer;border:1px solid var(--line);
-  background:var(--raise);color:var(--ink);transition:border-color .12s,background .12s,color .12s}
+/* ── buttons ── */
+.btn{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+  border-radius:7px;padding:9px 16px;cursor:pointer;border:1px solid var(--line2);
+  background:var(--raise);color:var(--ink);transition:border-color .12s,background .12s,color .12s;white-space:nowrap}
 .btn:hover{color:var(--ink2);border-color:var(--accent-dim)}
 .btn:active{transform:translateY(1px)}
 .btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.btn.primary{background:var(--accent);border-color:var(--accent);color:#14100a;font-weight:700}
-.btn.primary:hover{background:#e39250;border-color:#e39250;color:#14100a}
-a.btn{display:inline-block;text-decoration:none}
-.hook{font-family:var(--sans);font-size:12.5px;color:var(--dim);max-width:34ch;text-align:right}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#140f08;font-weight:700}
+.btn.primary:hover{background:var(--accent-hot);border-color:var(--accent-hot);color:#140f08}
+.btn.sm{padding:6px 12px;font-size:10px}
+a.btn{display:inline-flex;align-items:center}
+
+/* ── hero (full-bleed, carries the decay field) ── */
+.hero{position:relative;overflow:hidden;border-bottom:1px solid var(--hair);background:#07080c}
+canvas.viz{position:absolute;inset:0;z-index:0;width:100%;height:100%;pointer-events:none;
+  -webkit-mask-image:linear-gradient(180deg,#000 0%,#000 82%,transparent 100%);
+  mask-image:linear-gradient(180deg,#000 0%,#000 82%,transparent 100%)}
+.hero-in{position:relative;z-index:1;max-width:1060px;margin:0 auto;padding:88px 22px 72px}
+.hero.compact .hero-in{padding:56px 22px 48px}
+.chip{display:inline-flex;align-items:center;gap:9px;background:rgba(13,16,22,.85);border:1px solid var(--line2);
+  border-radius:999px;padding:7px 14px;font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink2);
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.chip .dot{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulse 2.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.display{font-family:var(--mono);font-weight:700;letter-spacing:-.045em;color:var(--ink2);
+  font-size:clamp(38px,6.4vw,72px);line-height:1.02;margin:22px 0 0;text-wrap:balance;
+  text-shadow:0 0 22px rgba(7,8,12,.95),0 4px 34px rgba(7,8,12,.9)}
+.display em{font-style:normal;color:var(--accent)}
+.lede{font-family:var(--sans);font-size:clamp(14.5px,1.7vw,17px);color:var(--dim);max-width:56ch;margin:18px 0 0;line-height:1.6;
+  text-shadow:0 0 14px rgba(7,8,12,.95)}
+.lede b{color:var(--ink)}
+.cmdrow{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:30px 0 0}
+.cmdbox{display:flex;align-items:center;gap:14px;background:rgba(13,16,22,.9);border:1px solid var(--line2);
+  border-radius:9px;padding:13px 18px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.cmdbox .cmd{font-size:16px;font-weight:700;color:var(--ink2)}
+.cmdbox .cmd .p{color:var(--faint);font-weight:400}.cmdbox .cmd .n{color:var(--accent)}
+.herostats{display:flex;gap:44px;flex-wrap:wrap;margin:44px 0 0}
+.hs .v{font-size:26px;font-weight:700;color:var(--ink2);letter-spacing:-.02em}
+.hs .v.money{color:var(--accent)}
+.hs .k{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin-top:2px}
+
+/* ── sections ── */
+.sec{padding:64px 0}
+.sec.tight{padding:44px 0}
+.sec-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:22px}
+.sec-head h2{font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);margin:0;font-weight:700}
+.sec-head .r{font-size:11px;color:var(--faint)}
+.panel{background:var(--surface);border:1px solid var(--line2);border-radius:12px;overflow:hidden}
+
+/* ── board ── */
+.tabs{display:flex;gap:2px;padding:14px 16px 6px}
+.tab{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);
+  background:none;border:1px solid var(--hair);border-radius:6px;padding:5px 12px;cursor:pointer}
+.tab:hover{color:var(--ink);border-color:var(--line2)}
+.tab.on{color:var(--accent);border-color:var(--accent-dim)}
+.tab:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.lb{padding:4px 8px 12px}
+.lb-row{display:grid;grid-template-columns:34px minmax(0,1fr) minmax(120px,220px) 110px;gap:12px;align-items:center;
+  padding:11px 10px;border-radius:8px;transition:background .12s}
+.lb-row:hover{background:var(--raise)}
+.lb-rank{text-align:right;color:var(--faint);font-size:12.5px}
+.lb-row.r1 .lb-rank,.lb-row.r2 .lb-rank,.lb-row.r3 .lb-rank{color:var(--accent);font-weight:700}
+.lb-who{min-width:0}
+.lb-handle{font-size:13.5px;font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
+.lb-row:hover .lb-handle{color:var(--ink2)}
+.lb-ago{font-size:10.5px;color:var(--faint)}
+.lb-burn{text-align:right;font-weight:700;color:var(--accent);font-size:14px}
+.lb-burn i{font-style:normal;color:var(--faint);font-size:10.5px;font-weight:400}
+.lb-scale{position:relative;height:20px}
+.lb-scale .ax{position:absolute;top:10px;left:0;right:0;height:1px;background:var(--hair)}
+.lb-scale .fill{position:absolute;top:8px;left:0;height:4px;background:var(--accent-dim);border-radius:2px}
+.lb-row.r1 .lb-scale .fill{background:var(--accent)}
+@media(max-width:560px){.lb-row{grid-template-columns:28px minmax(0,1fr) 96px}.lb-scale{display:none}}
+.ghost{opacity:.35;pointer-events:none}
+.claim{margin:4px 16px 16px;border:1px dashed var(--accent-dim);border-radius:9px;padding:14px 18px;
+  font-family:var(--sans);font-size:13.5px;color:var(--ink)}
+.claim b{color:var(--accent)}
+
+/* ── distribution ── */
+.dist{padding:6px 18px 18px}
+.d{display:flex;align-items:center;gap:12px;padding:4px 0}
+.d .dl{width:76px;text-align:right;color:var(--dim);font-size:11.5px}
+.d .dt{flex:1;height:9px;background:var(--raise);border-radius:2px;overflow:hidden}
+.d .df{height:100%;background:#3b465c}
+.d.you .df{background:var(--accent)}
+.d .dc{width:44px;color:var(--faint);font-size:11.5px}
+.d.you .dc{color:var(--accent)}
+
+/* ── how it works ── */
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+@media(max-width:720px){.steps{grid-template-columns:1fr}}
+.step{background:var(--surface);border:1px solid var(--line2);border-radius:12px;padding:22px 20px}
+.step .g{font-size:20px;color:var(--accent);font-weight:700}
+.step h3{font-family:var(--sans);font-size:15px;color:var(--ink2);margin:10px 0 6px;font-weight:700}
+.step p{font-family:var(--sans);font-size:13px;color:var(--dim);margin:0;line-height:1.55}
+.step code{font-family:var(--mono);color:var(--accent);font-size:12px}
+
+/* ── email capture ── */
+.updates{background:var(--surface);border:1px solid var(--line2);border-radius:12px;padding:30px 28px;
+  display:flex;gap:26px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.updates h3{font-family:var(--mono);font-size:19px;color:var(--ink2);margin:0 0 6px;letter-spacing:-.02em}
+.updates p{font-family:var(--sans);font-size:13.5px;color:var(--dim);margin:0;max-width:46ch;line-height:1.55}
+.subform{display:flex;gap:10px;flex-wrap:wrap}
+.subform input{font-family:var(--mono);font-size:13px;background:var(--bg);border:1px solid var(--line2);
+  border-radius:7px;padding:10px 14px;color:var(--ink2);min-width:240px}
+.subform input::placeholder{color:var(--faint)}
+.subform input:focus{outline:none;border-color:var(--accent-dim)}
+.form-msg{font-size:11px;color:var(--green);margin-top:8px;min-height:14px;font-family:var(--sans)}
+.form-msg.err{color:var(--red)}
+
+/* ── card pages (/@handle, /demo) ── */
+.sheet{max-width:760px;margin:0 auto;background:var(--surface);border:1px solid var(--line2);border-radius:12px;overflow:hidden}
+.card-hero{position:relative;overflow:hidden;padding:34px 24px 28px;border-bottom:1px solid var(--hair);background:#090b10;min-height:210px;
+  display:flex;flex-direction:column;justify-content:center}
+.card-hero>*{position:relative;z-index:1}
+.card-hero .display{font-size:clamp(34px,5.4vw,52px)}
+.lab{padding:18px 24px 8px;font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--faint);
+  display:flex;justify-content:space-between;align-items:baseline}
+.lab .r{letter-spacing:.02em;text-transform:none}
+.finds{padding:4px 24px}
+.f{display:grid;grid-template-columns:80px 1fr;gap:16px;align-items:baseline;padding:15px 0;border-bottom:1px solid var(--hair)}
+.f:last-child{border-bottom:0}
+.f .fm{font-size:25px;font-weight:700;letter-spacing:-.02em;color:var(--accent);line-height:1;text-align:right}
+.f .ft{font-family:var(--sans);font-size:14.5px;line-height:1.5;color:var(--ink)}
+.meas{padding:0 24px 8px}
+.m{padding:12px 0;border-bottom:1px solid var(--hair)}
+.m:last-child{border-bottom:0}
+.m .mh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+.m .name{color:var(--ink);font-size:12.5px}
+.m .vals{display:flex;gap:12px;align-items:baseline}
+.m .v{color:var(--ink2);font-weight:700;font-size:13px}
+.m .pc{color:var(--dim);font-size:11px;width:66px;text-align:right}
+.m .pc b{color:var(--accent)}
+.scale{position:relative;height:20px}
+.scale .axis{position:absolute;top:10px;left:0;right:0;height:1px;background:#2a3342}
+.scale .tick{position:absolute;top:6px;width:1px;height:5px;background:#232c3a}
+.scale .med{position:absolute;top:5px;width:7px;height:7px;background:var(--surface);border:1px solid #8b94a6;transform:translate(-50%,0) rotate(45deg)}
+.scale .you{position:absolute;top:10px;transform:translateX(-50%)}
+.scale .you .cap{position:absolute;left:50%;top:-4px;transform:translateX(-50%);width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:7px solid var(--accent)}
+.scale .you .stem{position:absolute;left:50%;top:2px;transform:translateX(-50%);width:1px;height:8px;background:var(--accent)}
+.mix{padding:2px 24px 18px}
+.mixbar{display:flex;height:9px;border-radius:2px;overflow:hidden;background:var(--raise)}
+.mixbar i{display:block;height:100%}
+.mixleg{display:flex;gap:20px;margin-top:10px;font-size:11.5px;color:var(--dim)}
+.mixleg em{font-style:normal;display:inline-block;width:8px;height:8px;border-radius:1px;margin-right:6px;vertical-align:middle}
+.tips{padding:2px 24px 16px}
+.tip{padding:11px 0;border-bottom:1px solid var(--hair)}
+.tip:last-child{border-bottom:0}
+.tip .th{font-family:var(--sans);font-size:14px;color:var(--ink2);font-weight:600}
+.tip .th s{text-decoration:none;color:var(--green)}
+.tip .ts{font-family:var(--sans);font-size:12.5px;color:var(--dim);margin-top:2px}
+.card-cta{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
+  padding:18px 24px;border-top:1px solid var(--line2);background:rgba(224,138,67,.04)}
+.card-cta .cmd{font-size:15px;font-weight:700;color:var(--ink2)}
+.card-cta .cmd .p{color:var(--faint);font-weight:400}.card-cta .cmd .n{color:var(--accent)}
+.hook{font-family:var(--sans);font-size:13px;color:var(--dim);max-width:36ch;text-align:right}
 .hook b{color:var(--ink2)}
 
-/* trust footer */
-.trust{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:13px 18px;
-  border-top:1px solid var(--hair);font-size:10.5px;color:var(--faint)}
-.trust a{color:var(--dim);border-bottom:1px solid var(--hair)}
-.trust a:hover{color:var(--ink)}
-.trust .g{color:var(--green)}
+/* ── terminal demo ── */
+.term{background:#06070a;border:1px solid var(--line2);border-radius:10px;padding:18px 20px;
+  font-size:12.5px;line-height:1.8;overflow-x:auto}
+.term .p{color:var(--faint)} .term .c{color:var(--ink2)} .term .a{color:var(--accent)} .term .g{color:var(--green)} .term .d{color:var(--dim)}
+.term .bar{color:var(--accent-dim)}
 
-@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+/* ── footer ── */
+.footer{border-top:1px solid var(--hair);background:var(--surface);margin-top:26px}
+.footer-in{max-width:1060px;margin:0 auto;padding:44px 22px 30px;display:grid;grid-template-columns:1.3fr 1fr 1.4fr;gap:36px}
+@media(max-width:760px){.footer-in{grid-template-columns:1fr}}
+.footer .fb{letter-spacing:.3em;font-weight:700;color:var(--ink2);font-size:13px}
+.footer .fb b{color:var(--accent)}
+.footer .ftag{font-family:var(--sans);font-size:12.5px;color:var(--dim);margin:10px 0 0;max-width:34ch;line-height:1.55}
+.footer .fpriv{font-size:11px;color:var(--faint);margin-top:14px;line-height:1.7}
+.footer .fpriv .g{color:var(--green)}
+.fcol h4{font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--faint);margin:0 0 12px}
+.fcol a{display:block;font-size:12.5px;color:var(--dim);padding:3px 0}
+.fcol a:hover{color:var(--ink2)}
+.legal{max-width:1060px;margin:0 auto;padding:14px 22px 22px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;
+  font-size:10.5px;color:var(--faint);border-top:1px solid var(--hair)}
+
+/* ── cookie consent ── */
+.cookiebar{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:80;width:min(680px,calc(100vw - 28px));
+  background:var(--raise);border:1px solid var(--line2);border-radius:12px;padding:14px 18px;
+  display:none;align-items:center;gap:16px;flex-wrap:wrap;box-shadow:0 18px 50px -12px rgba(0,0,0,.7)}
+.cookiebar.show{display:flex}
+.cookiebar p{font-family:var(--sans);font-size:12.5px;color:var(--ink);margin:0;flex:1;min-width:220px;line-height:1.5}
+.cookiebar p b{color:var(--ink2)}
+
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}html{scroll-behavior:auto}}
 `;
 
 const JS = `
 (function(){
   var rm = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  // count-up on data-n numbers
+  // count-up
   if (!rm) document.querySelectorAll('[data-n]').forEach(function(el){
     var t = +el.getAttribute('data-n'); if (!isFinite(t)) return;
     var usd = el.getAttribute('data-fmt') === 'usd'; var s = performance.now();
@@ -376,7 +447,7 @@ const JS = `
         r.classList.remove('r1','r2','r3'); if (i<3) r.classList.add('r'+(i+1)); lb.appendChild(r); });
     });
   });
-  // live board refresh (60s, only when visible, only on the board page)
+  // live board refresh
   if (lb && location.pathname === '/') setInterval(function(){
     if (document.hidden) return;
     fetch(location.href).then(function(r){ return r.text(); }).then(function(t){
@@ -384,40 +455,81 @@ const JS = `
       var nb = doc.querySelector('.lb'); if (nb) lb.innerHTML = nb.innerHTML;
     }).catch(function(){});
   }, 60000);
+  // mailing list
+  document.querySelectorAll('.subform').forEach(function(form){
+    form.addEventListener('submit', function(e){
+      e.preventDefault();
+      var input = form.querySelector('input'), btn = form.querySelector('button'), msg = form.parentElement.querySelector('.form-msg');
+      var email = (input.value||'').trim();
+      btn.disabled = true;
+      fetch('/subscribe', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({email:email, source: location.pathname})})
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+          if (d.ok) { msg.textContent = 'Subscribed — first report lands next month.'; msg.classList.remove('err'); input.value=''; }
+          else { msg.textContent = d.error || 'Something went wrong — try again.'; msg.classList.add('err'); }
+          btn.disabled = false;
+        }).catch(function(){ msg.textContent = 'Network error — try again.'; msg.classList.add('err'); btn.disabled = false; });
+    });
+  });
+  // cookie consent — one first-party cookie, only after an explicit yes
+  var bar = document.getElementById('cookiebar');
+  function beacon(){
+    var day = new Date().toISOString().slice(0,10);
+    if (localStorage.getItem('trot_lastping') === day) return;
+    localStorage.setItem('trot_lastping', day);
+    fetch('/visit', {method:'POST'}).catch(function(){});
+  }
+  var consent = localStorage.getItem('trot_consent');
+  if (consent === 'yes') { beacon(); }
+  else if (!consent && bar) { bar.classList.add('show'); }
+  if (bar) {
+    var acc = document.getElementById('ck-accept'), dec = document.getElementById('ck-decline');
+    if (acc) acc.addEventListener('click', function(){
+      localStorage.setItem('trot_consent','yes');
+      if (!document.cookie.includes('trot_id=')) {
+        var id = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+        document.cookie = 'trot_id=' + id + ';path=/;max-age=31536000;SameSite=Lax';
+      }
+      beacon(); bar.classList.remove('show');
+    });
+    if (dec) dec.addEventListener('click', function(){
+      localStorage.setItem('trot_consent','no'); bar.classList.remove('show');
+    });
+  }
 })();
 `;
 
 // ── the 3D signature: a token-decay field ───────────────────────────
-// Tokens stream through the context window ember-bright, rot to ash as they age
-// (the re-read share), while the rare survivors — the % that became real code —
-// stay lit and drift upward. Parameterized per page by real numbers via __VIZ.
-// One THREE.Points draw call; paused when hidden; static frame under reduced motion.
+// Full-bleed behind the hero. Tokens spawn at the right ember-bright, drift left
+// through the context window and rot to ash; the survivors — the % that became
+// real code — stay lit and rise. Parameterized per page via __VIZ.
 const VIZ_JS = `
 (function(){
   if(!window.THREE) return;
   var cv=document.querySelector('canvas.viz'); if(!cv) return;
   var rm=matchMedia('(prefers-reduced-motion: reduce)').matches;
   var P=window.__VIZ||{gen:1,reread:92};
-  var W=cv.clientWidth||600,H=cv.clientHeight||160,renderer;
+  var W=cv.clientWidth||900,H=cv.clientHeight||420,renderer;
   try{renderer=new THREE.WebGLRenderer({canvas:cv,alpha:true,antialias:false});}catch(e){return;}
   renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));renderer.setSize(W,H,false);
   var scene=new THREE.Scene();
-  var cam=new THREE.PerspectiveCamera(55,W/H,.1,100);cam.position.z=15;
-  var N=(innerWidth<600?2200:5200);
-  var surv=Math.max(.02,(P.gen||1)/100*2);         // fraction that stays lit
-  var rot=Math.min(1,(P.reread||90)/100);          // how fast the rest decays
+  var cam=new THREE.PerspectiveCamera(55,W/H,.1,100);cam.position.z=17;
+  var N=(innerWidth<600?2400:6200);
+  var surv=Math.max(.02,(P.gen||1)/100*2);
+  var rot=Math.min(1,(P.reread||90)/100);
   var geo=new THREE.BufferGeometry();
   var pos=new Float32Array(N*3),col=new Float32Array(N*3),meta=new Array(N);
-  var ember=new THREE.Color('#ff8f45'),bright=new THREE.Color('#ffc98a'),ash=new THREE.Color('#3a4354');
+  var ember=new THREE.Color('#ff9142'),bright=new THREE.Color('#ffd08e'),ash=new THREE.Color('#414b5e');
+  var SPAN=34;
   function reset(i,init){
-    pos[i*3]=init?(Math.random()*44-22):(22+Math.random()*6);
-    pos[i*3+1]=(Math.random()-.5)*9; pos[i*3+2]=(Math.random()-.5)*7;
-    meta[i]={v:.015+Math.random()*.032,s:Math.random()<surv,a:init?Math.random():0,w:Math.random()*6.28};
+    pos[i*3]=init?(Math.random()*SPAN*2-SPAN):(SPAN+Math.random()*6);
+    pos[i*3+1]=(Math.random()-.5)*11; pos[i*3+2]=(Math.random()-.5)*8;
+    meta[i]={v:.02+Math.random()*.045,s:Math.random()<surv,a:init?Math.random():0,w:Math.random()*6.28};
   }
   for(var i=0;i<N;i++)reset(i,true);
   geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
   geo.setAttribute('color',new THREE.BufferAttribute(col,3));
-  scene.add(new THREE.Points(geo,new THREE.PointsMaterial({size:.16,vertexColors:true,transparent:true,opacity:1,depthWrite:false,blending:THREE.AdditiveBlending})));
+  scene.add(new THREE.Points(geo,new THREE.PointsMaterial({size:.22,vertexColors:true,transparent:true,opacity:1,depthWrite:false,blending:THREE.AdditiveBlending})));
   var mx=0,my=0;
   addEventListener('pointermove',function(e){mx=e.clientX/innerWidth-.5;my=e.clientY/innerHeight-.5;},{passive:true});
   var c=new THREE.Color();
@@ -425,15 +537,15 @@ const VIZ_JS = `
     for(var i=0;i<N;i++){
       var m=meta[i];
       pos[i*3]-=m.v;
-      pos[i*3+1]+=Math.sin(t*.0006+m.w)*.0035+(m.s?.007:0);
-      m.a+=m.v/40;
-      if(pos[i*3]<-23)reset(i,false);
-      if(m.s)c.copy(bright);else c.copy(ember).lerp(ash,Math.pow(Math.min(1,m.a),.6)*rot+(1-rot)*.2);
+      pos[i*3+1]+=Math.sin(t*.0006+m.w)*.004+(m.s?.008:0);
+      m.a+=m.v/(SPAN*1.7);
+      if(pos[i*3]<-SPAN-1)reset(i,false);
+      if(m.s)c.copy(bright);else c.copy(ember).lerp(ash,Math.pow(Math.min(1,m.a),.55)*rot+(1-rot)*.2);
       col[i*3]=c.r;col[i*3+1]=c.g;col[i*3+2]=c.b;
     }
     geo.attributes.position.needsUpdate=true;geo.attributes.color.needsUpdate=true;
-    cam.position.x+=(mx*1.5-cam.position.x)*.04;
-    cam.position.y+=(-my*.9-cam.position.y)*.04;
+    cam.position.x+=(mx*2-cam.position.x)*.04;
+    cam.position.y+=(-my*1.1-cam.position.y)*.04;
     cam.lookAt(0,0,0);
     renderer.render(scene,cam);
   }
@@ -459,6 +571,7 @@ function timeAgo(ms) {
   if (s < 86400) return Math.round(s / 3600) + "h ago";
   return Math.round(s / 86400) + "d ago";
 }
+const ord = (n) => n + (n % 10 === 1 && n % 100 !== 11 ? "st" : n % 10 === 2 && n % 100 !== 12 ? "nd" : n % 10 === 3 && n % 100 !== 13 ? "rd" : "th");
 
 function scaleHtml(pct) {
   const x = Math.max(3, Math.min(97, pct));
@@ -468,12 +581,9 @@ function scaleHtml(pct) {
 }
 function measRow(name, val, pct) {
   if (pct == null) return "";
-  const top = 100 - pct;
-  const tag = pct >= 50 ? `<b>${ord(Math.min(99, pct))}</b> pctl` : `${ord(Math.max(1, pct))} pctl`;
+  const tag = `<b>${ord(Math.max(1, Math.min(99, pct)))}</b> pctl`;
   return `<div class="m"><div class="mh"><span class="name">${name}</span><span class="vals"><span class="v num">${val}</span><span class="pc num">${tag}</span></span></div>${scaleHtml(pct)}</div>`;
 }
-const ord = (n) => n + (n % 10 === 1 && n % 100 !== 11 ? "st" : n % 10 === 2 && n % 100 !== 12 ? "nd" : n % 10 === 3 && n % 100 !== 13 ? "rd" : "th");
-
 function histHtml(counts, youBucket) {
   const maxc = Math.max(1, ...counts);
   return HIST_LABELS.map((lb, i) => `<div class="d${i === youBucket ? " you" : ""}"><span class="dl">${lb}</span>
@@ -511,14 +621,78 @@ function tipsHtml(d) {
     tips.slice(0, 3).map(([h, s]) => `<div class="tip"><div class="th">${h}</div><div class="ts">${s}</div></div>`).join("") + `</div>`;
 }
 
-function shell({ title, ogDesc, body, metaRight, path = "/", viz = null }) {
+const NAV = (active) => `
+<nav class="nav" aria-label="Main"><div class="nav-in">
+  <a class="brand" href="/" aria-label="tokenrot home">TOKEN<b>ROT</b></a>
+  <div class="nav-links">
+    <a href="/" ${active === "board" ? 'class="on" aria-current="page"' : ""}>board</a>
+    <a href="/demo" ${active === "demo" ? 'class="on" aria-current="page"' : ""}>demo</a>
+    <a href="https://github.com/MaximusStupidus/tokenrot">source</a>
+    <a href="#updates">updates</a>
+  </div>
+  <button class="btn primary sm copy" type="button" aria-label="Copy the command npx tokenrot">npx tokenrot</button>
+</div></nav>`;
+
+const UPDATES_SECTION = `
+<section class="sec tight" id="updates"><div class="container">
+  <div class="updates">
+    <div>
+      <h3>The Burn Report</h3>
+      <p>Once a month: what the cohort actually spent, which models got throttled, and where the money leaked. Written from the board's data — <b>no spam, unsubscribe anytime.</b></p>
+    </div>
+    <div>
+      <form class="subform" novalidate>
+        <input type="email" name="email" placeholder="you@dev.email" autocomplete="email" aria-label="Email address" required/>
+        <button class="btn primary" type="submit">subscribe</button>
+      </form>
+      <div class="form-msg" role="status" aria-live="polite"></div>
+    </div>
+  </div>
+</div></section>`;
+
+const COOKIEBAR = `
+<div class="cookiebar" id="cookiebar" role="dialog" aria-label="Cookie consent">
+  <p><b>One cookie, no trackers.</b> We'd like to set a single first-party cookie to count visits. No IPs, no fingerprinting, no third parties — that's the whole product ethos.</p>
+  <button class="btn primary" id="ck-accept" type="button">allow</button>
+  <button class="btn" id="ck-decline" type="button">decline</button>
+</div>`;
+
+const FOOTER = `
+<footer class="footer">
+  <div class="footer-in">
+    <div>
+      <div class="fb">TOKEN<b>ROT</b></div>
+      <p class="ftag">The independent watchdog for AI-coding spend. Reads your local logs, prices the burn, ranks you anonymously.</p>
+      <p class="fpriv"><span class="g">●</span> local-first · anonymous handles · no accounts · no IPs stored · delete anytime with <span class="num">tokenrot --forget</span></p>
+    </div>
+    <div class="fcol">
+      <h4>Product</h4>
+      <a href="/">the board</a>
+      <a href="/demo">demo report</a>
+      <a href="/prices">live prices</a>
+      <a href="https://github.com/MaximusStupidus/tokenrot">source on GitHub</a>
+      <a href="https://github.com/MaximusStupidus/tokenrot/blob/main/docs/PRIVACY.md">privacy</a>
+    </div>
+    <div class="fcol">
+      <h4>Get the Burn Report</h4>
+      <form class="subform" novalidate>
+        <input type="email" name="email" placeholder="you@dev.email" autocomplete="email" aria-label="Email address" required/>
+        <button class="btn primary" type="submit">subscribe</button>
+      </form>
+      <div class="form-msg" role="status" aria-live="polite"></div>
+    </div>
+  </div>
+  <div class="legal"><span>© 2026 tokenrot · MIT · runs on your machine</span><span>npx tokenrot</span></div>
+</footer>`;
+
+function shell({ title, ogDesc, body, path = "/", viz = null, active = "" }) {
   const canonical = BASE + path;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>${title}</title>
 <link rel="canonical" href="${canonical}"/>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
-<link rel="mask-icon" href="/favicon.svg" color="#d5813c"/>
+<link rel="mask-icon" href="/favicon.svg" color="#e08a43"/>
 <meta property="og:type" content="website"/>
 <meta property="og:site_name" content="tokenrot"/>
 <meta property="og:url" content="${canonical}"/>
@@ -528,26 +702,19 @@ function shell({ title, ogDesc, body, metaRight, path = "/", viz = null }) {
 <meta name="twitter:title" content="${title}"/>
 <meta name="twitter:description" content="${ogDesc}"/>
 <meta name="description" content="${ogDesc}"/>
-<meta name="theme-color" content="#0a0c10"/>
-<style>${CSS}</style></head><body><div class="wrap"><div class="sheet">
-<header class="top"><a class="id" href="/" aria-label="tokenrot home">TOKEN<b>ROT</b></a><span class="meta">${metaRight}</span></header>
-${body}
-<footer class="trust"><span><span class="g">●</span> local-first · anonymous · no accounts · no IPs stored</span>
-<span><a href="https://github.com/MaximusStupidus/tokenrot">source</a> · <a href="/prices">live prices</a> · <a href="https://github.com/MaximusStupidus/tokenrot/blob/main/docs/PRIVACY.md">privacy</a></span></footer>
-</div></div>
+<meta name="theme-color" content="#08090d"/>
+<style>${CSS}</style></head><body>
+${NAV(active)}
+<main>${body}</main>
+${UPDATES_SECTION}
+${FOOTER}
+${COOKIEBAR}
 <script>window.__VIZ=${JSON.stringify(viz || { gen: 1.2, reread: 92 })}</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" defer></script>
 <script>${JS}
 window.addEventListener('load',function(){${VIZ_JS}});</script></body></html>`;
 }
 
-const ctaHtml = (hook) => `
-<div class="cta">
-  <div class="cmdline"><span class="cmd"><span class="p">$</span> npx <span class="n">tokenrot</span></span>
-    <button class="btn primary copy" type="button" aria-label="Copy the command npx tokenrot">copy command</button>
-    <a class="btn" href="https://github.com/MaximusStupidus/tokenrot" aria-label="View the source on GitHub">view source</a></div>
-  <div class="hook">${hook}</div>
-</div>`;
 const VIZ_CANVAS = `<canvas class="viz" aria-hidden="true"></canvas>`;
 
 function pageHtml(focusId, demo = false, wantedHandle = null) {
@@ -556,7 +723,7 @@ function pageHtml(focusId, demo = false, wantedHandle = null) {
   for (const v of cols.projectedUsd) counts[bucketOf(v)]++;
   const med = median(cols.projectedUsd);
 
-  let d = null; // per-user data
+  let d = null;
   if (demo) d = DEMO;
   else if (focusId) {
     const row = getRow.get(focusId);
@@ -574,34 +741,105 @@ function pageHtml(focusId, demo = false, wantedHandle = null) {
 
   if (d) {
     const who = d.handle ? "@" + d.handle : "spend report";
-    const hook = d.spendPct >= 55
-      ? `Out-burns <b>${d.spendPct}% of developers.</b> See where you land.`
-      : `Leaner than <b>${Math.max(1, 100 - d.spendPct)}% of developers.</b> See where you land.`;
     return shell({
       title: `${who} · ${$(d.proj)}/mo AI-coding burn · tokenrot`,
       ogDesc: `${Math.round(d.reread)}% of tokens re-read context, ${d.gen}% wrote code, Opus ${Math.round(d.opus)}% of the bill — ranked vs ${d.cohort.toLocaleString()} devs.`,
-      metaRight: `${demo ? "demo · " : ""}<span class="num">${d.cohort.toLocaleString()}</span>&nbsp;devs on the board`,
       path: demo ? "/demo" : d.handle ? "/@" + d.handle : "/",
       viz: { gen: d.gen, reread: d.reread },
-      body: youBody(d) + ctaHtml(hook),
+      active: demo ? "demo" : "",
+      body: cardBody(d, demo),
     });
   }
-  // wanted a handle that doesn't exist → fall through to board with a note
   const totalBurn = cols.projectedUsd.reduce((a, b) => a + b, 0);
   return shell({
     title: "tokenrot — the AI-spend leaderboard",
     ogDesc: n > 0 ? `${n.toLocaleString()} anonymous devs ranked by AI-coding burn. Median ${$(med)}/mo.` : "Find out what your AI coding actually costs — and where you rank. 100% local, anonymous.",
-    metaRight: `<span class="live"></span> <span class="num" data-n="${n}">${n.toLocaleString()}</span>&nbsp;devs`,
     path: "/",
     viz: { gen: median(cols.genPct) ?? 1.2, reread: median(cols.rereadPct) ?? 92 },
-    body: (n > 0 ? boardBody(n, med, counts, totalBurn, wantedHandle) : emptyBody()) + ctaHtml(`Anonymous handle, public rank, <b>zero code leaves your machine.</b>`),
+    active: "board",
+    body: boardPage(n, med, counts, totalBurn, wantedHandle),
   });
 }
 
-function boardBody(n, med, counts, totalBurn, missing) {
+function boardPage(n, med, counts, totalBurn, missing) {
+  const empty = n === 0;
+  const hero = `
+  <section class="hero">${VIZ_CANVAS}
+    <div class="hero-in">
+      <span class="chip"><span class="dot"></span>The AI-spend leaderboard${empty ? "" : " · live"}</span>
+      <h1 class="display">Your tokens are <em>rotting</em>.</h1>
+      <p class="lede">Up to <b>96% of what you pay for</b> is the model re-reading context it already saw. One command reads your local logs — <b>nothing leaves your machine</b> — and shows the truth, then ranks you anonymously.</p>
+      <div class="cmdrow">
+        <div class="cmdbox"><span class="cmd"><span class="p">$</span> npx <span class="n">tokenrot</span></span>
+          <button class="btn primary copy" type="button" aria-label="Copy the command npx tokenrot">copy</button></div>
+        <a class="btn" href="https://github.com/MaximusStupidus/tokenrot" aria-label="View source on GitHub">view source</a>
+      </div>
+      <div class="herostats">
+        <div class="hs"><div class="v num" data-n="${n}">${n.toLocaleString()}</div><div class="k">devs ranked</div></div>
+        <div class="hs"><div class="v money num" ${med ? `data-n="${Math.round(med)}" data-fmt="usd"` : ""}>${med ? $(med) : "$—"}</div><div class="k">median burn / mo</div></div>
+        <div class="hs"><div class="v money num" ${totalBurn ? `data-n="${Math.round(totalBurn)}" data-fmt="usd"` : ""}>${totalBurn ? $(totalBurn) : "$—"}</div><div class="k">cohort total / mo</div></div>
+      </div>
+    </div>
+  </section>`;
+
+  const boardSection = empty
+    ? `
+  <section class="sec"><div class="narrow">
+    <div class="sec-head"><h2>The board</h2><span class="r">waiting for its first dev</span></div>
+    <div class="panel">
+      <div class="lb">${["feral-cachegoblin-73", "opus-pilled-tokensmith-9", "chaotic-looprunner-41", "stealth-contexthoarder-12"].map((h, i) => `
+        <div class="lb-row ghost"><span class="lb-rank num">${i + 1}</span>
+          <span class="lb-who"><span class="lb-handle">${h}</span><span class="lb-ago">—</span></span>
+          <span class="lb-scale"><span class="ax"></span></span>
+          <span class="lb-burn num">$&thinsp;—<i>/mo</i></span></div>`).join("")}</div>
+      <div class="claim"><b>#1 is open.</b> Run <span class="num">npx tokenrot --compare</span> and own the top of the board under an anonymous handle.</div>
+    </div>
+  </div></section>`
+    : `
+  <section class="sec"><div class="narrow">
+    <div class="sec-head"><h2>Rankings</h2><span class="r">top 100 · refreshes live</span></div>
+    ${missing ? `<p style="font-family:var(--sans);color:var(--dim);font-size:13px;margin:0 0 14px">No dev named <b>@${missing}</b> on the board (yet) — here's everyone who is.</p>` : ""}
+    <div class="panel">
+      <div class="tabs" role="group" aria-label="Sort rankings">
+        <button class="tab on" type="button" data-k="burn" aria-pressed="true">$ burn</button>
+        <button class="tab" type="button" data-k="reread" aria-pressed="false">% re-read</button>
+        <button class="tab" type="button" data-k="opus" aria-pressed="false">% opus</button>
+      </div>
+      <div class="lb">${boardRows()}</div>
+      <div class="lab"><span>Spend distribution</span><span class="r num">${n.toLocaleString()} devs</span></div>
+      <div class="dist">${histHtml(counts, -1)}</div>
+    </div>
+  </div></section>`;
+
+  const how = `
+  <section class="sec"><div class="container">
+    <div class="sec-head"><h2>How it works</h2><span class="r">zero deps · open source</span></div>
+    <div class="steps">
+      <div class="step"><div class="g num">$</div><h3>Run it locally</h3><p><code>npx tokenrot</code> reads the usage logs Claude Code &amp; Codex already keep on your disk. No account, no upload, nothing leaves your machine.</p></div>
+      <div class="step"><div class="g num">%</div><h3>See the truth</h3><p>API-equivalent cost of every token — live prices — plus the stat nobody expects: how little of your bill was the model actually <em>writing code</em>.</p></div>
+      <div class="step"><div class="g num">@</div><h3>Rank &amp; share</h3><p><code>--compare</code> puts you on this board under a random handle, tells you how to cut the burn, and gives you a receipt worth posting.</p></div>
+    </div>
+  </div></section>`;
+
+  const term = empty ? `
+  <section class="sec tight"><div class="narrow">
+    <div class="sec-head"><h2>What you'll see</h2><span class="r">real output</span></div>
+    <div class="term"><span class="p">$</span> <span class="c">npx tokenrot</span>
+<span class="d">Across</span> <span class="c">15,877</span> <span class="d">messages in</span> <span class="c">495</span> <span class="d">sessions, the model was actually</span>
+<span class="d">writing code</span> <span class="a">0.93%</span> <span class="d">of the time.</span>
+<span class="d">You've burned</span> <span class="a">$3,517</span> <span class="d">in API-equivalent value over 38 days.</span>
+<span class="d">Re-reading old context</span> <span class="bar">████████████████████░░</span> <span class="c">91%</span>
+<span class="d">Claude writing code</span>&nbsp;&nbsp;&nbsp;<span class="bar">░░░░░░░░░░░░░░░░░░░░░░</span> <span class="c">0.9%</span>
+<span class="g">🔒 Local.</span> <span class="d">Nothing was uploaded. No account.</span></div>
+  </div></section>` : "";
+
+  return hero + boardSection + term + how;
+}
+
+function boardRows() {
   const rows = db.query("SELECT handle, projectedUsd, genPct, rereadPct, opusSharePct, updatedAt FROM subs WHERE handle IS NOT NULL ORDER BY projectedUsd DESC LIMIT 100").all();
   const maxBurn = Math.max(1, rows[0]?.projectedUsd || 1);
-  const tr = rows.map((r, i) => `
+  return rows.map((r, i) => `
     <a class="lb-row${i < 3 ? " r" + (i + 1) : ""}" href="/@${r.handle}"
        data-burn="${r.projectedUsd}" data-reread="${r.rereadPct}" data-opus="${r.opusSharePct}">
       <span class="lb-rank num">${i + 1}</span>
@@ -609,71 +847,45 @@ function boardBody(n, med, counts, totalBurn, missing) {
       <span class="lb-scale"><span class="ax"></span><span class="fill" style="width:${Math.max(2, Math.round((r.projectedUsd / maxBurn) * 100))}%"></span></span>
       <span class="lb-burn num">${$(r.projectedUsd)}<i>/mo</i></span>
     </a>`).join("");
-  return `
-  <div class="hero">${VIZ_CANVAS}<div class="kicker">The AI-spend leaderboard</div>
-    <h1>Who's burning the most<br/>on AI coding?</h1>
-    ${missing ? `<p class="sub">No dev named <b>@${missing}</b> on the board (yet) — here's everyone who is.</p>` : ""}
-  </div>
-  <div class="strip">
-    <div class="cell"><div class="k">Devs ranked</div><div class="v num" data-n="${n}">${n.toLocaleString()}</div><div class="s">anonymous handles</div></div>
-    <div class="cell"><div class="k">Median burn</div><div class="v money num" data-n="${Math.round(med || 0)}" data-fmt="usd">${$(med)}</div><div class="s">projected / month</div></div>
-    <div class="cell"><div class="k">Cohort total</div><div class="v money num" data-n="${Math.round(totalBurn)}" data-fmt="usd">${$(totalBurn)}</div><div class="s">API-equivalent / month</div></div>
-  </div>
-  <div class="lab"><span>Rankings</span><span class="r">top 100 · live</span></div>
-  <div class="tabs">
-    <button class="tab on" type="button" data-k="burn" aria-pressed="true">$ burn</button>
-    <button class="tab" type="button" data-k="reread" aria-pressed="false">% re-read</button>
-    <button class="tab" type="button" data-k="opus" aria-pressed="false">% opus</button>
-  </div>
-  <div class="lb">${tr}</div>
-  <div class="lab"><span>Spend distribution</span><span class="r num">${n.toLocaleString()} devs</span></div>
-  <div class="dist">${histHtml(counts, -1)}</div>`;
 }
 
-function emptyBody() {
-  const ghosts = ["feral-cachegoblin-73", "opus-pilled-tokensmith-9", "chaotic-looprunner-41", "stealth-contexthoarder-12"]
-    .map((h, i) => `<div class="lb-row ghost"><span class="lb-rank num">${i + 1}</span>
-      <span class="lb-who"><span class="lb-handle">${h}</span><span class="lb-ago">—</span></span>
-      <span class="lb-scale"><span class="ax"></span></span>
-      <span class="lb-burn num">$&thinsp;—<i>/mo</i></span></div>`).join("");
+function cardBody(d, demo) {
+  const hook = d.spendPct >= 55
+    ? `Out-burns <b>${d.spendPct}% of developers.</b> See where you land.`
+    : `Leaner than <b>${Math.max(1, 100 - d.spendPct)}% of developers.</b> See where you land.`;
+  const mix = `<div class="mixbar"><i style="width:${d.opus}%;background:var(--accent)"></i><i style="width:${100 - d.opus}%;background:#39445a"></i></div>
+    <div class="mixleg"><span><em style="background:var(--accent)"></em>Opus ${d.opus}%</span><span><em style="background:#39445a"></em>Everything else ${Math.round((100 - d.opus) * 10) / 10}%</span></div>`;
   return `
-  <div class="hero">${VIZ_CANVAS}<div class="kicker">The AI-spend leaderboard</div>
-    <h1>What does your AI coding<br/><em>actually</em> cost?</h1>
-    <p class="sub">One command. Reads your local logs — nothing leaves your machine — then shows the truth.</p>
-  </div>
-  <div class="term"><span class="p">$</span> <span class="c">npx tokenrot</span>
-<span class="d">Across</span> <span class="c">15,877</span> <span class="d">messages in</span> <span class="c">495</span> <span class="d">sessions, the model was actually</span>
-<span class="d">writing code</span> <span class="a">0.93%</span> <span class="d">of the time.</span>
-<span class="d">You've burned</span> <span class="a">$3,517</span> <span class="d">in API-equivalent value over 38 days.</span>
-<span class="d">Re-reading old context</span> <span class="bar">████████████████████░░</span> <span class="c">91%</span>
-<span class="d">Claude writing code</span>&nbsp;&nbsp;&nbsp;<span class="bar">░░░░░░░░░░░░░░░░░░░░░░</span> <span class="c">0.9%</span>
-<span class="g">🔒 Local.</span> <span class="d">Nothing was uploaded. No account.</span></div>
-  <div class="lab"><span>The board</span><span class="r">waiting for its first dev</span></div>
-  <div class="lb">${ghosts}</div>
-  <div class="claim"><b>#1 is open.</b> Run <span class="num">npx tokenrot --compare</span> and own the top of the board under an anonymous handle.</div>`;
-}
-
-function youBody(d) {
-  const mix = `<div class="mixbar"><i style="width:${d.opus}%;background:var(--accent)"></i><i style="width:${100 - d.opus}%;background:#2b323f"></i></div>
-    <div class="mixleg"><span><em style="background:var(--accent)"></em>Opus ${d.opus}%</span><span><em style="background:#2b323f"></em>Everything else ${Math.round((100 - d.opus) * 10) / 10}%</span></div>`;
-  return `
-  <div class="hero">${VIZ_CANVAS}<div class="kicker">Spend report · ${d.handle ? "@" + d.handle : "anonymous"}</div>
-    <h1><span class="num">${$(d.proj)}</span><em>/mo</em> projected burn</h1>
-    <p class="sub">ranked against <b class="num">${d.cohort.toLocaleString()}</b> devs · median <span class="num">${$(d.medProj)}</span>/mo</p></div>
-  <div class="finds">${findingsHtml(d)}</div>
-  <div class="lab"><span>Where this lands</span><span class="r">percentile vs cohort · ◆ median</span></div>
-  <div class="meas">
-    ${measRow("Monthly spend", $(d.proj), d.spendPct)}
-    ${measRow("Tokens that were actual code", d.gen + "%", d.genPct)}
-    ${measRow("Spent re-reading context", Math.round(d.reread) + "%", d.rereadPct)}
-    ${measRow("Opus reliance", Math.round(d.opus) + "%", d.opusPct)}
-    ${measRow("Burn per active day", $(d.avgDaily), d.dayPct)}
-  </div>
-  <div class="lab"><span>Model mix</span><span class="r">by cost</span></div>
-  <div class="mix">${mix}</div>
-  ${tipsHtml(d)}
-  <div class="lab"><span>Cohort distribution</span><span class="r">projected / month</span></div>
-  <div class="dist">${histHtml(d.counts, d.youBucket)}</div>`;
+  <section class="sec tight"><div class="container">
+    <div class="sheet">
+      <div class="card-hero">${VIZ_CANVAS}
+        <span class="chip"><span class="dot"></span>Spend report · ${d.handle ? "@" + d.handle : "anonymous"}${demo ? " · demo" : ""}</span>
+        <h1 class="display" style="margin-top:16px"><span class="num">${$(d.proj)}</span><em>/mo</em> burn</h1>
+        <p class="lede" style="font-size:13.5px">ranked against <b class="num">${d.cohort.toLocaleString()}</b> devs · median <span class="num">${$(d.medProj)}</span>/mo</p>
+      </div>
+      <div class="finds">${findingsHtml(d)}</div>
+      <div class="lab"><span>Where this lands</span><span class="r">percentile vs cohort · ◆ median</span></div>
+      <div class="meas">
+        ${measRow("Monthly spend", $(d.proj), d.spendPct)}
+        ${measRow("Tokens that were actual code", d.gen + "%", d.genPct)}
+        ${measRow("Spent re-reading context", Math.round(d.reread) + "%", d.rereadPct)}
+        ${measRow("Opus reliance", Math.round(d.opus) + "%", d.opusPct)}
+        ${measRow("Burn per active day", $(d.avgDaily), d.dayPct)}
+      </div>
+      <div class="lab"><span>Model mix</span><span class="r">by cost</span></div>
+      <div class="mix">${mix}</div>
+      ${tipsHtml(d)}
+      <div class="lab"><span>Cohort distribution</span><span class="r">projected / month</span></div>
+      <div class="dist" style="padding:6px 24px 20px">${histHtml(d.counts, d.youBucket)}</div>
+      <div class="card-cta">
+        <span class="cmd"><span class="p">$</span> npx <span class="n">tokenrot</span></span>
+        <div style="display:flex;gap:10px;align-items:center">
+          <button class="btn primary copy" type="button" aria-label="Copy the command npx tokenrot">copy command</button>
+          <span class="hook">${hook}</span>
+        </div>
+      </div>
+    </div>
+  </div></section>`;
 }
 
 console.log(`tokenrot compare server on :${PORT} (db ${DB_PATH})`);
