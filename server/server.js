@@ -109,7 +109,7 @@ function sanitize(b) {
     genPct: num(b.genPct, 0, 100), rereadPct: num(b.rereadPct, 0, 100), opusSharePct: num(b.opusSharePct, 0, 100),
     anomalyRatio: num(b.anomalyRatio, 0, 1000), spanDays: Math.round(num(b.spanDays, 0, 100000)), activeDays: Math.round(num(b.activeDays, 0, 100000)),
     tokTotal: num(b.tokens?.total), tokOutput: num(b.tokens?.output), tokCacheRead: num(b.tokens?.cacheRead),
-    role: cleanLabel(b.role),
+    role: Array.isArray(b.role) ? b.role.map(cleanLabel).filter(Boolean).slice(0, 4).join(",") || null : cleanLabel(b.role),
     pays: cleanLabel(b.pays),
     aiShare: cleanLabel(b.aiShare),
     feels: cleanLabel(b.feels),

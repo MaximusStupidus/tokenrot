@@ -133,7 +133,7 @@ export async function runSurvey() {
   const pickOne = (label, options) => (interactive ? selectMCQ(label, options) : askMCQ(label, options));
   const pickMany = (label, options) => (interactive ? selectMCQ(label, options, { multi: true }) : askMCQ(label, options, { multi: true }));
 
-  const role = await pickOne("What are you?", ["engineer", "founder/indie hacker", "student", "researcher"]);
+  const role = await pickMany("What are you? (all that apply)", ["engineer", "founder/indie hacker", "student", "researcher"]);
   const tools = await pickMany("Which AI coding tools have touched your codebase?", ["claude-code", "cursor", "codex", "copilot", "windsurf", "aider"]);
   const pays = await pickOne("Who pays the bill?", ["me, painfully (self)", "employer (bless them)", "both"]);
   const aiShare = await pickOne("How much of your shipped code does the AI write these days?", ["under 25%", "25-75%", "over 75%", "100% - i am merely the reviewer now"]);
