@@ -59,11 +59,14 @@ async function askMCQ(label, options, { multi = false } = {}) {
   return null;
 }
 
-// Arrow-key selector for real terminals: ↑↓ to move, Space toggles (multi),
-// Enter confirms. Typing is only for "add your own". Collapses to one ✓ line.
+// Arrow-key selector for real terminals. Single: ↑↓ + Enter selects.
+// Multi: Enter (or Space) TOGGLES the highlighted option; an explicit
+// "✓ done" row confirms. Typing only for "add your own". Handles both
+// CSI (ESC[A) and SS3 (ESC OA) arrow encodings.
 function selectMCQ(label, options, { multi = false } = {}) {
-  const opts = [...options, "add your own"];
-  const OWN = opts.length - 1;
+  const opts = multi ? [...options, "add your own…", "done"] : [...options, "add your own…"];
+  const OWN = options.length;
+  const DONE = multi ? options.length + 1 : -1;
   return new Promise((resolve) => {
     const out = process.stdout, stdin = process.stdin;
     let idx = 0;
@@ -74,22 +77,29 @@ function selectMCQ(label, options, { multi = false } = {}) {
       for (let i = 0; i < opts.length; i++) {
         out.write("\x1b[2K");
         const cur = i === idx;
-        const mark = multi
-          ? (picked.has(i) ? c.ember("[x]") : c.dim("[ ]"))
-          : (cur ? c.ember("❯") : " ");
-        const label_ = i === OWN ? (cur ? c.bold("add your own…") : c.dim("add your own…")) : (cur ? c.bold(c.white(opts[i])) : opts[i]);
-        out.write(`    ${cur ? c.ember("›") : " "} ${mark} ${label_}\n`);
+        let mark, text;
+        if (i === DONE) {
+          mark = cur ? c.green("❯") : " ";
+          text = picked.size ? (cur ? c.bold(c.green("✓ done — continue")) : c.green("✓ done — continue")) : (cur ? c.bold("✓ done — continue") : c.dim("✓ done — continue"));
+        } else if (i === OWN) {
+          mark = multi ? (picked.has(i) ? c.ember("[x]") : c.dim("[ ]")) : (cur ? c.ember("❯") : " ");
+          text = cur ? c.bold("add your own…") : c.dim("add your own…");
+        } else {
+          mark = multi ? (picked.has(i) ? c.ember("[x]") : c.dim("[ ]")) : (cur ? c.ember("❯") : " ");
+          text = cur ? c.bold(c.white(opts[i])) : opts[i];
+        }
+        out.write(`    ${cur ? c.ember("›") : " "} ${mark} ${text}\n`);
       }
       if (multi) {
         out.write("\x1b[2K");
         const sel = [...picked].filter((i) => i !== OWN).map((i) => opts[i].replace(/ \(.*\)$/, ""));
-        out.write(sel.length
-          ? `      ${c.green(sel.length + " selected:")} ${c.white(sel.join(", "))}${picked.has(OWN) ? c.dim(" + your own") : ""}  ${c.dim("· enter when done")}\n`
-          : `      ${c.dim("nothing selected yet — enter picks just the highlighted one")}\n`);
+        out.write(picked.size
+          ? `      ${c.green(picked.size + " selected")}${sel.length ? ": " + c.white(sel.join(", ")) : ""}${picked.has(OWN) ? c.dim(" + your own") : ""}  ${c.dim("→ pick more, or hit enter on ✓ done")}\n`
+          : `      ${c.dim("enter or space marks an option — pick as many as apply")}\n`);
       }
     };
     const hint = multi
-      ? c.ember("SPACE") + c.gray(" selects (pick several!) · ") + c.ember("ENTER") + c.gray(" when done")
+      ? c.ember("ENTER") + c.gray(" marks each option · finish on ") + c.green("✓ done")
       : c.dim("↑↓ move · enter selects");
     out.write(`\n  ${c.gray(label)}  ${hint}\n`);
     out.write("\x1b[?25l");
@@ -103,7 +113,7 @@ function selectMCQ(label, options, { multi = false } = {}) {
       if (rest) stdin.unshift(rest); // hand unconsumed keys to the next prompt
       out.write("\x1b[?25h");
       collapse();
-      let vals = choices.filter((i) => i !== OWN).map((i) => opts[i].replace(/ \(.*\)$/, ""));
+      let vals = choices.filter((i) => i !== OWN && i !== DONE).map((i) => opts[i].replace(/ \(.*\)$/, ""));
       if (choices.includes(OWN)) {
         const own = clean(await ask(`  ${c.gray(label)} ${c.dim("— type yours")} ${c.dim("›")} `));
         out.write("\x1b[1A\x1b[2K"); // tidy the typed line too
@@ -114,16 +124,18 @@ function selectMCQ(label, options, { multi = false } = {}) {
       resolve(val);
     };
     const onKey = (chunk) => {
-      // a chunk may carry several keys (paste, fast input) — split into tokens
-      const keys = String(chunk).match(/\x1b\[[A-D]|[\s\S]/g) || [];
+      // tokenize: CSI arrows, SS3 arrows, then single chars (paste-safe)
+      const keys = String(chunk).match(/\x1b\[[A-D]|\x1bO[A-D]|[\s\S]/g) || [];
       for (let i = 0; i < keys.length; i++) {
-        const k = keys[i];
+        const k = keys[i].replace(/^\x1bO/, "\x1b["); // normalize SS3 → CSI
         if (k === "\x03") { stdin.setRawMode(false); out.write("\x1b[?25h\n"); process.exit(130); }
-        else if (k === "\x1b[A" || k === "\x1b[D" || k === "k") { idx = (idx - 1 + opts.length) % opts.length; render(); }
-        else if (k === "\x1b[B" || k === "\x1b[C" || k === "j" || k === "\t") { idx = (idx + 1) % opts.length; render(); }
-        else if (k === " " && multi) { picked.has(idx) ? picked.delete(idx) : picked.add(idx); render(); }
-        else if (k === "\r" || k === "\n") {
-          const choices = multi ? (picked.size ? [...picked] : [idx]) : [idx];
+        else if (k === "\x1b[A" || k === "\x1b[D") { idx = (idx - 1 + opts.length) % opts.length; render(); }
+        else if (k === "\x1b[B" || k === "\x1b[C" || k === "\t") { idx = (idx + 1) % opts.length; render(); }
+        else if ((k === " " || k === "\r" || k === "\n") && multi && idx !== DONE) {
+          picked.has(idx) ? picked.delete(idx) : picked.add(idx); render();
+        }
+        else if ((k === "\r" || k === "\n") && (!multi || idx === DONE)) {
+          const choices = multi ? [...picked] : [idx];
           finish(choices, keys.slice(i + 1).join("")); // unconsumed keys → next prompt
           return;
         }
