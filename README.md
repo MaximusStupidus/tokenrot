@@ -15,7 +15,14 @@ Runs 100% on your machine — no signup, no API key, nothing uploaded.
 ![deps](https://img.shields.io/badge/dependencies-0-brightgreen)
 
 ```bash
-npx tokenrot
+npx tokenrot          # zero-install, always latest
+```
+
+or install it as a real command:
+
+```bash
+npm install -g tokenrot
+tokenrot              # from anywhere, no npx
 ```
 
 <img src="https://raw.githubusercontent.com/MaximusStupidus/tokenrot/main/docs/demo.svg" alt="tokenrot output" width="720">

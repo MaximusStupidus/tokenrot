@@ -59,17 +59,85 @@ async function askMCQ(label, options, { multi = false } = {}) {
   return null;
 }
 
+// Arrow-key selector for real terminals: ↑↓ to move, Space toggles (multi),
+// Enter confirms. Typing is only for "add your own". Collapses to one ✓ line.
+function selectMCQ(label, options, { multi = false } = {}) {
+  const opts = [...options, "add your own"];
+  const OWN = opts.length - 1;
+  return new Promise((resolve) => {
+    const out = process.stdout, stdin = process.stdin;
+    let idx = 0;
+    const picked = new Set();
+    const hint = multi ? "↑↓ move · space toggles · enter confirms" : "↑↓ move · enter selects";
+    const render = (first = false) => {
+      if (!first) out.write(`\x1b[${opts.length}A`);
+      for (let i = 0; i < opts.length; i++) {
+        out.write("\x1b[2K");
+        const cur = i === idx;
+        const mark = multi
+          ? (picked.has(i) ? c.ember("◉") : c.dim("○"))
+          : (cur ? c.ember("❯") : " ");
+        const label_ = i === OWN ? (cur ? c.bold("add your own…") : c.dim("add your own…")) : (cur ? c.bold(c.white(opts[i])) : opts[i]);
+        out.write(`    ${cur && multi ? c.ember("›") : " "}${mark} ${label_}\n`);
+      }
+    };
+    out.write(`\n  ${c.gray(label)}  ${c.dim("(" + hint + ")")}\n`);
+    out.write("\x1b[?25l");
+    render(true);
+    stdin.setRawMode(true); stdin.resume(); stdin.setEncoding("utf8");
+    const collapse = () => {
+      out.write(`\x1b[${opts.length + 2}A\x1b[J`); // wipe the menu block
+    };
+    const finish = async (choices, rest = "") => {
+      stdin.setRawMode(false); stdin.pause(); stdin.removeListener("data", onKey);
+      if (rest) stdin.unshift(rest); // hand unconsumed keys to the next prompt
+      out.write("\x1b[?25h");
+      collapse();
+      let vals = choices.filter((i) => i !== OWN).map((i) => opts[i].replace(/ \(.*\)$/, ""));
+      if (choices.includes(OWN)) {
+        const own = clean(await ask(`  ${c.gray(label)} ${c.dim("— type yours")} ${c.dim("›")} `));
+        out.write("\x1b[1A\x1b[2K"); // tidy the typed line too
+        if (own) vals.push(own);
+      }
+      const val = multi ? (vals.length ? [...new Set(vals)] : null) : (vals[0] ?? null);
+      out.write(`  ${c.green("✓")} ${c.gray(label)} ${c.dim("›")} ${c.white(multi && val ? val.join(", ") : val ?? c.dim("(skipped)"))}\n`);
+      resolve(val);
+    };
+    const onKey = (chunk) => {
+      // a chunk may carry several keys (paste, fast input) — split into tokens
+      const keys = String(chunk).match(/\x1b\[[A-D]|[\s\S]/g) || [];
+      for (let i = 0; i < keys.length; i++) {
+        const k = keys[i];
+        if (k === "\x03") { stdin.setRawMode(false); out.write("\x1b[?25h\n"); process.exit(130); }
+        else if (k === "\x1b[A" || k === "\x1b[D" || k === "k") { idx = (idx - 1 + opts.length) % opts.length; render(); }
+        else if (k === "\x1b[B" || k === "\x1b[C" || k === "j" || k === "\t") { idx = (idx + 1) % opts.length; render(); }
+        else if (k === " " && multi) { picked.has(idx) ? picked.delete(idx) : picked.add(idx); render(); }
+        else if (k === "\r" || k === "\n") {
+          const choices = multi ? (picked.size ? [...picked] : [idx]) : [idx];
+          finish(choices, keys.slice(i + 1).join("")); // unconsumed keys → next prompt
+          return;
+        }
+      }
+    };
+    stdin.on("data", onKey);
+  });
+}
+
 export async function runSurvey() {
   console.log(`
   ${c.bold(c.ember("THE VIBE CHECK"))} ${c.dim("— 5 quick ones before you hit the board (~20 seconds).")}
   ${c.dim("Why: labeled data makes the flywheel spin — better cohorts → sharper benchmarks →")}
-  ${c.dim("better receipts for everyone, including you. Anonymous, obviously.")}
-`);
-  const role = await askMCQ("What are you?", ["engineer", "founder/indie hacker", "student", "researcher"]);
-  const tools = await askMCQ("Which AI coding tools have touched your codebase?", ["claude-code", "cursor", "codex", "copilot", "windsurf", "aider"], { multi: true });
-  const pays = await askMCQ("Who pays the bill?", ["me, painfully (self)", "employer (bless them)", "both"]);
-  const aiShare = await askMCQ("How much of your shipped code does the AI write these days?", ["under 25%", "25-75%", "over 75%", "100% - i am merely the reviewer now"]);
-  const feels = await askMCQ("When you see what you've burned, you feel:", ["worth every cent", "mild guilt", "physical pain", "nothing - employer pays"]);
+  ${c.dim("better receipts for everyone, including you. Anonymous, obviously.")}`);
+  // real terminal → arrow-key selector; pipes/CI → numbered fallback
+  const interactive = !!(process.stdin.isTTY && process.stdout.isTTY && typeof process.stdin.setRawMode === "function");
+  const pickOne = (label, options) => (interactive ? selectMCQ(label, options) : askMCQ(label, options));
+  const pickMany = (label, options) => (interactive ? selectMCQ(label, options, { multi: true }) : askMCQ(label, options, { multi: true }));
+
+  const role = await pickOne("What are you?", ["engineer", "founder/indie hacker", "student", "researcher"]);
+  const tools = await pickMany("Which AI coding tools have touched your codebase?", ["claude-code", "cursor", "codex", "copilot", "windsurf", "aider"]);
+  const pays = await pickOne("Who pays the bill?", ["me, painfully (self)", "employer (bless them)", "both"]);
+  const aiShare = await pickOne("How much of your shipped code does the AI write these days?", ["under 25%", "25-75%", "over 75%", "100% - i am merely the reviewer now"]);
+  const feels = await pickOne("When you see what you've burned, you feel:", ["worth every cent", "mild guilt", "physical pain", "nothing - employer pays"]);
   console.log(`  ${c.green("✓")} ${c.dim("vibe recorded. the flywheel thanks you.")}`);
   // normalize the pays presets back to canonical values
   const PAYS_MAP = { "me, painfully": "self", "employer": "employer", both: "both" };

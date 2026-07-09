@@ -13,7 +13,7 @@ if (has("-h") || has("--help")) {
   console.log(`
   ${c.bgOrange(" tokenrot ")}  the truth about your AI-coding spend
 
-  Usage:  npx tokenrot [options]
+  Usage:  npx tokenrot [options]        (or: npm i -g tokenrot → tokenrot)
 
   Reads your local Claude Code / Codex logs and shows where your
   tokens and money actually go. 100% on-device — nothing is uploaded.
