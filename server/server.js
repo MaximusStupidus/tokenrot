@@ -201,17 +201,18 @@ b{font-weight:600;color:var(--ink2)}
 .top .live{width:6px;height:6px;border-radius:50%;background:var(--green)}
 
 /* hero — carries the 3D token-decay field behind the text */
-.hero{position:relative;overflow:hidden;padding:30px 18px 26px;border-bottom:1px solid var(--hair);min-height:158px;
-  display:flex;flex-direction:column;justify-content:center}
+.hero{position:relative;overflow:hidden;padding:34px 18px 30px;border-bottom:1px solid var(--hair);min-height:228px;
+  display:flex;flex-direction:column;justify-content:center;background:#090b0f}
 .hero>*{position:relative;z-index:1}
-canvas.viz{position:absolute;inset:0;z-index:0;width:100%;height:100%;pointer-events:none;opacity:.6;
-  -webkit-mask-image:radial-gradient(130% 110% at 32% 42%,#000 26%,transparent 80%);
-  mask-image:radial-gradient(130% 110% at 32% 42%,#000 26%,transparent 80%)}
+canvas.viz{position:absolute;inset:0;z-index:0;width:100%;height:100%;pointer-events:none;opacity:1;
+  -webkit-mask-image:linear-gradient(180deg,#000 0%,#000 78%,transparent 100%);
+  mask-image:linear-gradient(180deg,#000 0%,#000 78%,transparent 100%)}
 .kicker{font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--faint);margin-bottom:8px}
-.hero h1{font-family:var(--sans);font-size:clamp(21px,4.6vw,27px);font-weight:800;letter-spacing:-.025em;
-  margin:0;color:var(--ink2);line-height:1.15;text-wrap:balance;text-shadow:0 1px 8px rgba(10,12,16,.9)}
+.hero h1{font-family:var(--sans);font-size:clamp(22px,4.8vw,29px);font-weight:800;letter-spacing:-.025em;
+  margin:0;color:var(--ink2);line-height:1.15;text-wrap:balance;
+  text-shadow:0 0 14px rgba(9,11,15,.95),0 2px 22px rgba(9,11,15,.9)}
 .hero h1 em{font-style:normal;color:var(--accent)}
-.hero .sub{margin:9px 0 0;color:var(--dim);font-size:12.5px;text-shadow:0 1px 6px rgba(10,12,16,.9)}
+.hero .sub{margin:9px 0 0;color:var(--ink);font-size:12.5px;text-shadow:0 0 12px rgba(9,11,15,.95),0 2px 16px rgba(9,11,15,.9)}
 
 /* stats strip */
 .strip{display:grid;grid-template-columns:repeat(3,1fr);border-bottom:1px solid var(--hair)}
@@ -402,12 +403,12 @@ const VIZ_JS = `
   renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));renderer.setSize(W,H,false);
   var scene=new THREE.Scene();
   var cam=new THREE.PerspectiveCamera(55,W/H,.1,100);cam.position.z=15;
-  var N=(innerWidth<600?1600:3800);
-  var surv=Math.max(.012,(P.gen||1)/100*1.4);      // fraction that stays lit
+  var N=(innerWidth<600?2200:5200);
+  var surv=Math.max(.02,(P.gen||1)/100*2);         // fraction that stays lit
   var rot=Math.min(1,(P.reread||90)/100);          // how fast the rest decays
   var geo=new THREE.BufferGeometry();
   var pos=new Float32Array(N*3),col=new Float32Array(N*3),meta=new Array(N);
-  var ember=new THREE.Color('#d5813c'),bright=new THREE.Color('#ffb56b'),ash=new THREE.Color('#20262f');
+  var ember=new THREE.Color('#ff8f45'),bright=new THREE.Color('#ffc98a'),ash=new THREE.Color('#3a4354');
   function reset(i,init){
     pos[i*3]=init?(Math.random()*44-22):(22+Math.random()*6);
     pos[i*3+1]=(Math.random()-.5)*9; pos[i*3+2]=(Math.random()-.5)*7;
@@ -416,7 +417,7 @@ const VIZ_JS = `
   for(var i=0;i<N;i++)reset(i,true);
   geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
   geo.setAttribute('color',new THREE.BufferAttribute(col,3));
-  scene.add(new THREE.Points(geo,new THREE.PointsMaterial({size:.085,vertexColors:true,transparent:true,opacity:.95,depthWrite:false,blending:THREE.AdditiveBlending})));
+  scene.add(new THREE.Points(geo,new THREE.PointsMaterial({size:.16,vertexColors:true,transparent:true,opacity:1,depthWrite:false,blending:THREE.AdditiveBlending})));
   var mx=0,my=0;
   addEventListener('pointermove',function(e){mx=e.clientX/innerWidth-.5;my=e.clientY/innerHeight-.5;},{passive:true});
   var c=new THREE.Color();
