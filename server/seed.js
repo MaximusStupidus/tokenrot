@@ -41,7 +41,7 @@ for (let i = 0; i < N; i++) {
     id: "seed-" + crypto.randomUUID(),
     tool: "Claude Code",
     plan: pick([100, 200, 200, 200, null]),
-    role: pick(["engineer", "engineer", "engineer", "founder", "engineer,founder", "founder", "student", "researcher"]),
+    role: pick(["engineer", "engineer", "engineer", "founder", ["engineer", "founder"], "founder", "student", "researcher"]),
     tools,
     pays: pick(["self", "self", "employer", "both"]),
     aiShare: pick(["under 25%", "25-75%", "25-75%", "over 75%", "100% - i am merely the reviewer now"]),
