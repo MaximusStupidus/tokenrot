@@ -244,7 +244,7 @@ canvas.viz{position:absolute;inset:0;z-index:0;width:100%;height:100%;pointer-ev
   mask-image:linear-gradient(180deg,#000 0%,#000 82%,transparent 100%)}
 .hero-in{position:relative;z-index:1;max-width:1060px;margin:0 auto;padding:88px 22px 72px}
 .hero.compact .hero-in{padding:56px 22px 48px}
-.chip{display:inline-flex;align-items:center;gap:9px;background:rgba(13,16,22,.85);border:1px solid var(--line2);
+.chip{display:inline-flex;align-self:flex-start;align-items:center;gap:9px;background:rgba(13,16,22,.85);border:1px solid var(--line2);
   border-radius:999px;padding:7px 14px;font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink2);
   backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
 .chip .dot{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulse 2.4s ease-in-out infinite}
