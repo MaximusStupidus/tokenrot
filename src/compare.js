@@ -59,6 +59,19 @@ async function askMCQ(label, options, { multi = false } = {}) {
   return null;
 }
 
+// Truncate a colored string to the terminal width (ANSI-aware) so every
+// rendered row is EXACTLY one physical row — cursor-up math breaks otherwise.
+function fit(str, cols) {
+  const toks = String(str).match(/\x1b\[[0-9;]*m|[\s\S]/g) || [];
+  let vis = 0, out = "";
+  for (const t of toks) {
+    if (t.length > 1) { out += t; continue; } // ANSI code, zero width
+    if (vis >= cols - 2) { out += "\x1b[0m" + "\u2026"; return out; }
+    out += t; vis++;
+  }
+  return out;
+}
+
 // Arrow-key selector for real terminals. Single: ↑↓ + Enter selects.
 // Multi: Enter (or Space) TOGGLES the highlighted option; an explicit
 // "✓ done" row confirms. Typing only for "add your own". Handles both
@@ -73,6 +86,7 @@ function selectMCQ(label, options, { multi = false } = {}) {
     const picked = new Set();
     const lines = opts.length + (multi ? 1 : 0); // multi gets a live status line
     const render = (first = false) => {
+      const cols = out.columns || 80;
       if (!first) out.write(`\x1b[${lines}A`);
       for (let i = 0; i < opts.length; i++) {
         out.write("\x1b[2K");
@@ -88,23 +102,27 @@ function selectMCQ(label, options, { multi = false } = {}) {
           mark = multi ? (picked.has(i) ? c.ember("[x]") : c.dim("[ ]")) : (cur ? c.ember("❯") : " ");
           text = cur ? c.bold(c.white(opts[i])) : opts[i];
         }
-        out.write(`    ${cur ? c.ember("›") : " "} ${mark} ${text}\n`);
+        out.write(fit(`    ${cur ? c.ember("›") : " "} ${mark} ${text}`, cols) + "\n");
       }
       if (multi) {
         out.write("\x1b[2K");
         const sel = [...picked].filter((i) => i !== OWN).map((i) => opts[i].replace(/ \(.*\)$/, ""));
-        out.write(picked.size
-          ? `      ${c.green(picked.size + " selected")}${sel.length ? ": " + c.white(sel.join(", ")) : ""}${picked.has(OWN) ? c.dim(" + your own") : ""}  ${c.dim("→ pick more, or hit enter on ✓ done")}\n`
-          : `      ${c.dim("enter or space marks an option — pick as many as apply")}\n`);
+        out.write(fit(picked.size
+          ? `      ${c.green(picked.size + " selected")}${sel.length ? ": " + c.white(sel.join(", ")) : ""}${picked.has(OWN) ? c.dim(" + your own") : ""} ${c.dim("· ✓ done to continue")}`
+          : `      ${c.dim("enter or space marks an option — pick as many as apply")}`, cols) + "\n");
       }
     };
     const hint = multi
       ? c.ember("ENTER") + c.gray(" marks each option · finish on ") + c.green("✓ done")
       : c.dim("↑↓ move · enter selects");
-    out.write(`\n  ${c.gray(label)}  ${hint}\n`);
+    out.write("\n" + fit(`  ${c.gray(label)}  ${hint}`, out.columns || 80) + "\n");
     out.write("\x1b[?25l");
     render(true);
     stdin.setRawMode(true); stdin.resume(); stdin.setEncoding("utf8");
+    if (!process.__trotCursorGuard) {
+      process.__trotCursorGuard = true;
+      process.on("exit", () => { try { process.stdin.setRawMode?.(false); } catch {} process.stdout.write("\x1b[?25h"); });
+    }
     const collapse = () => {
       out.write(`\x1b[${lines + 2}A\x1b[J`); // wipe the menu block (+label +status)
     };
@@ -120,7 +138,7 @@ function selectMCQ(label, options, { multi = false } = {}) {
         if (own) vals.push(own);
       }
       const val = multi ? (vals.length ? [...new Set(vals)] : null) : (vals[0] ?? null);
-      out.write(`  ${c.green("✓")} ${c.gray(label)} ${c.dim("›")} ${c.white(multi && val ? val.join(", ") : val ?? c.dim("(skipped)"))}\n`);
+      out.write(fit(`  ${c.green("✓")} ${c.gray(label)} ${c.dim("›")} ${c.white(multi && val ? val.join(", ") : val ?? c.dim("(skipped)"))}`, out.columns || 80) + "\n");
       resolve(val);
     };
     const onKey = (chunk) => {
