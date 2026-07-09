@@ -68,25 +68,35 @@ function selectMCQ(label, options, { multi = false } = {}) {
     const out = process.stdout, stdin = process.stdin;
     let idx = 0;
     const picked = new Set();
-    const hint = multi ? "↑↓ move · space toggles · enter confirms" : "↑↓ move · enter selects";
+    const lines = opts.length + (multi ? 1 : 0); // multi gets a live status line
     const render = (first = false) => {
-      if (!first) out.write(`\x1b[${opts.length}A`);
+      if (!first) out.write(`\x1b[${lines}A`);
       for (let i = 0; i < opts.length; i++) {
         out.write("\x1b[2K");
         const cur = i === idx;
         const mark = multi
-          ? (picked.has(i) ? c.ember("◉") : c.dim("○"))
+          ? (picked.has(i) ? c.ember("[x]") : c.dim("[ ]"))
           : (cur ? c.ember("❯") : " ");
         const label_ = i === OWN ? (cur ? c.bold("add your own…") : c.dim("add your own…")) : (cur ? c.bold(c.white(opts[i])) : opts[i]);
-        out.write(`    ${cur && multi ? c.ember("›") : " "}${mark} ${label_}\n`);
+        out.write(`    ${cur ? c.ember("›") : " "} ${mark} ${label_}\n`);
+      }
+      if (multi) {
+        out.write("\x1b[2K");
+        const sel = [...picked].filter((i) => i !== OWN).map((i) => opts[i].replace(/ \(.*\)$/, ""));
+        out.write(sel.length
+          ? `      ${c.green(sel.length + " selected:")} ${c.white(sel.join(", "))}${picked.has(OWN) ? c.dim(" + your own") : ""}  ${c.dim("· enter when done")}\n`
+          : `      ${c.dim("nothing selected yet — enter picks just the highlighted one")}\n`);
       }
     };
-    out.write(`\n  ${c.gray(label)}  ${c.dim("(" + hint + ")")}\n`);
+    const hint = multi
+      ? c.ember("SPACE") + c.gray(" selects (pick several!) · ") + c.ember("ENTER") + c.gray(" when done")
+      : c.dim("↑↓ move · enter selects");
+    out.write(`\n  ${c.gray(label)}  ${hint}\n`);
     out.write("\x1b[?25l");
     render(true);
     stdin.setRawMode(true); stdin.resume(); stdin.setEncoding("utf8");
     const collapse = () => {
-      out.write(`\x1b[${opts.length + 2}A\x1b[J`); // wipe the menu block
+      out.write(`\x1b[${lines + 2}A\x1b[J`); // wipe the menu block (+label +status)
     };
     const finish = async (choices, rest = "") => {
       stdin.setRawMode(false); stdin.pause(); stdin.removeListener("data", onKey);
