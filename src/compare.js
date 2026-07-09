@@ -26,8 +26,24 @@ function clearAnonId() {
   try { fs.rmSync(idPath().file); } catch {}
 }
 
+// ── optional 3-question survey — labels the anonymous data ──────────
+// Asked BEFORE the consent preview so the answers appear in the exact payload
+// shown to the user. Every question is skippable with Enter.
+const ROLES = { 1: "engineer", 2: "founder", 3: "student", 4: "researcher", 5: "other" };
+const TOOLS = { 1: "claude-code", 2: "cursor", 3: "codex", 4: "copilot", 5: "windsurf", 6: "aider", 7: "other" };
+const PAYS = { 1: "self", 2: "employer", 3: "both" };
+
+export async function runSurvey() {
+  console.log(`\n  ${c.bold("Three optional questions")} ${c.dim("— they label the anonymous data (press Enter to skip any).")}\n`);
+  const role = ROLES[await ask(`  ${c.gray("Your role?")}  ${c.dim("1")} engineer  ${c.dim("2")} founder/indie  ${c.dim("3")} student  ${c.dim("4")} researcher  ${c.dim("5")} other ${c.dim("›")} `)] || null;
+  const toolsRaw = await ask(`  ${c.gray("AI coding tools you use?")} ${c.dim("(comma-sep)")}  ${c.dim("1")} claude-code  ${c.dim("2")} cursor  ${c.dim("3")} codex  ${c.dim("4")} copilot  ${c.dim("5")} windsurf  ${c.dim("6")} aider  ${c.dim("7")} other ${c.dim("›")} `);
+  const tools = [...new Set(toolsRaw.split(/[\s,]+/).map((t) => TOOLS[t]).filter(Boolean))];
+  const pays = PAYS[await ask(`  ${c.gray("Who pays for it?")}  ${c.dim("1")} me  ${c.dim("2")} employer  ${c.dim("3")} both ${c.dim("›")} `)] || null;
+  return { role, tools: tools.length ? tools : null, pays };
+}
+
 // ── the ONLY thing that ever leaves the machine ─────────────────────
-export function buildPayload(x, { tool, plan }) {
+export function buildPayload(x, { tool, plan, survey }) {
   const modelMix = {};
   for (const m of x.models) modelMix[m.model] = round((m.cost / (x.totals.cost || 1)) * 100, 1);
   const opus = x.models.find((m) => m.model === "Opus");
@@ -36,6 +52,9 @@ export function buildPayload(x, { tool, plan }) {
     v: 1,
     tool: tool || "Claude Code",
     plan: plan || null,
+    role: survey?.role || null,
+    tools: survey?.tools || null,
+    pays: survey?.pays || null,
     spanDays: x.spanDays || null,
     activeDays: x.activeDays,
     totalUsd: round(x.totals.cost),
@@ -76,13 +95,25 @@ export function showConsent(payload) {
   return out.join("\n");
 }
 
+// Line-buffered prompt. Piped stdin can deliver several answers in one chunk —
+// we split on newlines and queue the extras so later prompts don't hang.
+const _lineQueue = [];
+let _stdinEnded = false;
 export function ask(question) {
   return new Promise((resolve) => {
     process.stdout.write(question);
-    const onData = (d) => { cleanup(); resolve(String(d).trim().toLowerCase()); };
-    const cleanup = () => { process.stdin.pause(); process.stdin.removeListener("data", onData); };
-    try { process.stdin.resume(); process.stdin.once("data", onData); }
-    catch { resolve("n"); }
+    if (_lineQueue.length) return resolve(_lineQueue.shift());
+    if (_stdinEnded) return resolve("");
+    const onData = (d) => {
+      const lines = String(d).split("\n");
+      const first = lines.shift().trim().toLowerCase();
+      for (const l of lines) if (l.trim()) _lineQueue.push(l.trim().toLowerCase());
+      cleanup(); resolve(first);
+    };
+    const onEnd = () => { _stdinEnded = true; cleanup(); resolve(""); };
+    const cleanup = () => { process.stdin.pause(); process.stdin.removeListener("data", onData); process.stdin.removeListener("end", onEnd); };
+    try { process.stdin.resume(); process.stdin.once("data", onData); process.stdin.once("end", onEnd); }
+    catch { resolve(""); }
   });
 }
 

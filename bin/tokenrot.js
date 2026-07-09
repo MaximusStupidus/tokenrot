@@ -109,7 +109,8 @@ console.log(render(insights, { fileCount, tools: sources.map((s) => s.tool), pla
 // --compare: opt-in, anonymous ranking vs other devs
 if (has("--compare")) {
   const cmp = await import("../src/compare.js");
-  const payload = cmp.buildPayload(insights, { tool: sources[0]?.tool, plan: Number(val("--plan", "")) || null });
+  const survey = has("--yes") || has("-y") ? null : await cmp.runSurvey();
+  const payload = cmp.buildPayload(insights, { tool: sources[0]?.tool, plan: Number(val("--plan", "")) || null, survey });
   process.stdout.write(cmp.showConsent(payload));
   const yes = has("--yes") || has("-y");
   const ans = yes ? "y" : await cmp.ask(`  ${c.bold("Upload these numbers and see where you rank?")} ${c.dim("[y/N]")} `);

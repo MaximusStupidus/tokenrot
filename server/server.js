@@ -20,6 +20,11 @@ db.exec(`CREATE TABLE IF NOT EXISTS subs (
   updatedAt INTEGER
 );`);
 try { db.exec("ALTER TABLE subs ADD COLUMN handle TEXT"); db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_handle ON subs(handle)"); } catch {} // existing DBs
+// survey labels (anonymous, optional) + synthetic seed flag (purge: DELETE FROM subs WHERE synthetic=1)
+for (const col of ["role TEXT", "tools TEXT", "pays TEXT", "synthetic INTEGER DEFAULT 0"]) { try { db.exec(`ALTER TABLE subs ADD COLUMN ${col}`); } catch {} }
+const ROLE_OK = new Set(["engineer", "founder", "student", "researcher", "other"]);
+const PAYS_OK = new Set(["self", "employer", "both"]);
+const TOOL_OK = new Set(["claude-code", "cursor", "codex", "copilot", "windsurf", "aider", "other"]);
 
 // Mailing list + privacy-preserving visit counter (daily totals only — no ids, no IPs).
 db.exec(`CREATE TABLE IF NOT EXISTS emails (email TEXT PRIMARY KEY, ts INTEGER, source TEXT);`);
@@ -48,10 +53,11 @@ function makeHandle(id) {
 }
 
 const upsert = db.prepare(`INSERT INTO subs
-  (id,handle,tool,plan,totalUsd,monthUsd,projectedUsd,avgDailyUsd,genPct,rereadPct,opusSharePct,anomalyRatio,spanDays,activeDays,tokTotal,tokOutput,tokCacheRead,updatedAt)
-  VALUES ($id,$handle,$tool,$plan,$totalUsd,$monthUsd,$projectedUsd,$avgDailyUsd,$genPct,$rereadPct,$opusSharePct,$anomalyRatio,$spanDays,$activeDays,$tokTotal,$tokOutput,$tokCacheRead,$updatedAt)
+  (id,handle,role,tools,pays,tool,plan,totalUsd,monthUsd,projectedUsd,avgDailyUsd,genPct,rereadPct,opusSharePct,anomalyRatio,spanDays,activeDays,tokTotal,tokOutput,tokCacheRead,updatedAt)
+  VALUES ($id,$handle,$role,$tools,$pays,$tool,$plan,$totalUsd,$monthUsd,$projectedUsd,$avgDailyUsd,$genPct,$rereadPct,$opusSharePct,$anomalyRatio,$spanDays,$activeDays,$tokTotal,$tokOutput,$tokCacheRead,$updatedAt)
   ON CONFLICT(id) DO UPDATE SET
     handle=COALESCE(subs.handle,$handle),
+    role=COALESCE($role,subs.role),tools=COALESCE($tools,subs.tools),pays=COALESCE($pays,subs.pays),
     tool=$tool,plan=$plan,totalUsd=$totalUsd,monthUsd=$monthUsd,projectedUsd=$projectedUsd,avgDailyUsd=$avgDailyUsd,
     genPct=$genPct,rereadPct=$rereadPct,opusSharePct=$opusSharePct,anomalyRatio=$anomalyRatio,
     spanDays=$spanDays,activeDays=$activeDays,tokTotal=$tokTotal,tokOutput=$tokOutput,tokCacheRead=$tokCacheRead,updatedAt=$updatedAt`);
@@ -103,6 +109,9 @@ function sanitize(b) {
     genPct: num(b.genPct, 0, 100), rereadPct: num(b.rereadPct, 0, 100), opusSharePct: num(b.opusSharePct, 0, 100),
     anomalyRatio: num(b.anomalyRatio, 0, 1000), spanDays: Math.round(num(b.spanDays, 0, 100000)), activeDays: Math.round(num(b.activeDays, 0, 100000)),
     tokTotal: num(b.tokens?.total), tokOutput: num(b.tokens?.output), tokCacheRead: num(b.tokens?.cacheRead),
+    role: ROLE_OK.has(b.role) ? b.role : null,
+    pays: PAYS_OK.has(b.pays) ? b.pays : null,
+    tools: Array.isArray(b.tools) ? b.tools.filter((t) => TOOL_OK.has(t)).slice(0, 7).join(",") || null : null,
     updatedAt: Date.now(),
   };
 }

@@ -1,6 +1,6 @@
 {
   "name": "tokenrot",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "See where your AI-coding money actually goes. Reads your Claude Code / Codex logs locally — nothing leaves your machine.",
   "type": "module",
   "bin": {
