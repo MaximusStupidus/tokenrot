@@ -26,20 +26,54 @@ function clearAnonId() {
   try { fs.rmSync(idPath().file); } catch {}
 }
 
-// ── optional 3-question survey — labels the anonymous data ──────────
-// Asked BEFORE the consent preview so the answers appear in the exact payload
-// shown to the user. Every question is skippable with Enter.
-const ROLES = { 1: "engineer", 2: "founder", 3: "student", 4: "researcher", 5: "other" };
-const TOOLS = { 1: "claude-code", 2: "cursor", 3: "codex", 4: "copilot", 5: "windsurf", 6: "aider", 7: "other" };
-const PAYS = { 1: "self", 2: "employer", 3: "both" };
+// ── THE VIBE CHECK — 5 quick MCQs before the board ──────────────────
+// Mandatory-but-humane: blank answers get one nudge, then we let it go (and
+// piped/--yes runs skip the whole thing). Every question ends in "add your own".
+// Asked BEFORE the consent preview so answers appear in the exact payload shown.
+const clean = (s) => String(s).toLowerCase().replace(/[^a-z0-9 %_\/-]/g, "").replace(/\s+/g, " ").trim().slice(0, 40) || null;
+
+async function askMCQ(label, options, { multi = false } = {}) {
+  const ownIdx = options.length + 1;
+  const menu = options.map((o, i) => `${c.dim(String(i + 1))} ${o}`).join("  ") + `  ${c.dim(String(ownIdx))} ${c.dim("add your own")}`;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const raw = await ask(`  ${c.gray(label)}${multi ? c.dim(" (comma-sep)") : ""}\n    ${menu} ${c.dim("›")} `);
+    if (!raw) {
+      if (attempt === 0) { console.log(`  ${c.dim("c'mon, it's one keypress — the flywheel is hungry.")}`); continue; }
+      return null; // second blank: we're not monsters
+    }
+    const picks = (multi ? raw.split(/[\s,]+/) : [raw]).filter(Boolean);
+    const out = [];
+    let wantsOwn = false;
+    for (const p of picks) {
+      const n = Number(p);
+      if (n === ownIdx) wantsOwn = true;
+      else if (n >= 1 && n <= options.length) out.push(options[n - 1].replace(/ \(.*\)$/, ""));
+      else if (isNaN(n) && clean(p)) out.push(clean(p)); // they just typed the answer — respect it
+    }
+    if (wantsOwn) {
+      const own = clean(await ask(`    ${c.gray("go on, type it")} ${c.dim("›")} `));
+      if (own) out.push(own);
+    }
+    if (out.length) return multi ? [...new Set(out)] : out[0];
+  }
+  return null;
+}
 
 export async function runSurvey() {
-  console.log(`\n  ${c.bold("Three optional questions")} ${c.dim("— they label the anonymous data (press Enter to skip any).")}\n`);
-  const role = ROLES[await ask(`  ${c.gray("Your role?")}  ${c.dim("1")} engineer  ${c.dim("2")} founder/indie  ${c.dim("3")} student  ${c.dim("4")} researcher  ${c.dim("5")} other ${c.dim("›")} `)] || null;
-  const toolsRaw = await ask(`  ${c.gray("AI coding tools you use?")} ${c.dim("(comma-sep)")}  ${c.dim("1")} claude-code  ${c.dim("2")} cursor  ${c.dim("3")} codex  ${c.dim("4")} copilot  ${c.dim("5")} windsurf  ${c.dim("6")} aider  ${c.dim("7")} other ${c.dim("›")} `);
-  const tools = [...new Set(toolsRaw.split(/[\s,]+/).map((t) => TOOLS[t]).filter(Boolean))];
-  const pays = PAYS[await ask(`  ${c.gray("Who pays for it?")}  ${c.dim("1")} me  ${c.dim("2")} employer  ${c.dim("3")} both ${c.dim("›")} `)] || null;
-  return { role, tools: tools.length ? tools : null, pays };
+  console.log(`
+  ${c.bold(c.ember("THE VIBE CHECK"))} ${c.dim("— 5 quick ones before you hit the board (~20 seconds).")}
+  ${c.dim("Why: labeled data makes the flywheel spin — better cohorts → sharper benchmarks →")}
+  ${c.dim("better receipts for everyone, including you. Anonymous, obviously.")}
+`);
+  const role = await askMCQ("What are you?", ["engineer", "founder/indie hacker", "student", "researcher"]);
+  const tools = await askMCQ("Which AI coding tools have touched your codebase?", ["claude-code", "cursor", "codex", "copilot", "windsurf", "aider"], { multi: true });
+  const pays = await askMCQ("Who pays the bill?", ["me, painfully (self)", "employer (bless them)", "both"]);
+  const aiShare = await askMCQ("How much of your shipped code does the AI write these days?", ["under 25%", "25-75%", "over 75%", "100% - i am merely the reviewer now"]);
+  const feels = await askMCQ("When you see what you've burned, you feel:", ["worth every cent", "mild guilt", "physical pain", "nothing - employer pays"]);
+  console.log(`  ${c.green("✓")} ${c.dim("vibe recorded. the flywheel thanks you.")}`);
+  // normalize the pays presets back to canonical values
+  const PAYS_MAP = { "me, painfully": "self", "employer": "employer", both: "both" };
+  return { role, tools: tools || null, pays: PAYS_MAP[pays] || pays, aiShare, feels };
 }
 
 // ── the ONLY thing that ever leaves the machine ─────────────────────
@@ -55,6 +89,8 @@ export function buildPayload(x, { tool, plan, survey }) {
     role: survey?.role || null,
     tools: survey?.tools || null,
     pays: survey?.pays || null,
+    aiShare: survey?.aiShare || null,
+    feels: survey?.feels || null,
     spanDays: x.spanDays || null,
     activeDays: x.activeDays,
     totalUsd: round(x.totals.cost),

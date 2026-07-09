@@ -44,6 +44,8 @@ for (let i = 0; i < N; i++) {
     role: pick(["engineer", "engineer", "engineer", "founder", "founder", "student", "researcher", "other"]),
     tools,
     pays: pick(["self", "self", "employer", "both"]),
+    aiShare: pick(["under 25%", "25-75%", "25-75%", "over 75%", "100% - i am merely the reviewer now"]),
+    feels: pick(["worth every cent", "worth every cent", "mild guilt", "physical pain", "nothing - employer pays"]),
     projectedUsd: round(proj),
     monthUsd: round(proj * rnd(0.3, 0.9)),
     totalUsd: round(proj * (spanDays / 30)),
