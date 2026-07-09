@@ -80,6 +80,8 @@ function selectMCQ(label, options, { multi = false } = {}) {
   const opts = multi ? [...options, "add your own…", "done"] : [...options, "add your own…"];
   const OWN = options.length;
   const DONE = multi ? options.length + 1 : -1;
+  const neededRows = opts.length + (multi ? 1 : 0) + 3;
+  if ((process.stdout.rows || 24) < neededRows) return askMCQ(label, options, { multi });
   return new Promise((resolve) => {
     const out = process.stdout, stdin = process.stdin;
     let idx = 0;
@@ -121,20 +123,22 @@ function selectMCQ(label, options, { multi = false } = {}) {
     stdin.setRawMode(true); stdin.resume(); stdin.setEncoding("utf8");
     if (!process.__trotCursorGuard) {
       process.__trotCursorGuard = true;
-      process.on("exit", () => { try { process.stdin.setRawMode?.(false); } catch {} process.stdout.write("\x1b[?25h"); });
+      const restore = () => { try { process.stdin.setRawMode?.(false); } catch {} process.stdout.write("\x1b[?25h"); };
+      process.on("exit", restore);
+      for (const sig of ["SIGTERM", "SIGHUP"]) process.once(sig, () => { restore(); process.exit(1); });
     }
     const collapse = () => {
       out.write(`\x1b[${lines + 2}A\x1b[J`); // wipe the menu block (+label +status)
     };
-    const finish = async (choices, rest = "") => {
+    const finish = async (choices) => {
       stdin.setRawMode(false); stdin.pause(); stdin.removeListener("data", onKey);
-      if (rest) stdin.unshift(rest); // hand unconsumed keys to the next prompt
       out.write("\x1b[?25h");
       collapse();
       let vals = choices.filter((i) => i !== OWN && i !== DONE).map((i) => opts[i].replace(/ \(.*\)$/, ""));
       if (choices.includes(OWN)) {
-        const own = clean(await ask(`  ${c.gray(label)} ${c.dim("— type yours")} ${c.dim("›")} `));
-        out.write("\x1b[1A\x1b[2K"); // tidy the typed line too
+        // short, fit prompt; leave the typed line in place (erasing it is what breaks)
+        const cols = out.columns || 80;
+        const own = clean(await ask(fit(`  ${c.gray(label)} ${c.dim("— type yours")}`, Math.max(20, cols - 22)) + ` ${c.dim("›")} `));
         if (own) vals.push(own);
       }
       const val = multi ? (vals.length ? [...new Set(vals)] : null) : (vals[0] ?? null);
@@ -153,9 +157,8 @@ function selectMCQ(label, options, { multi = false } = {}) {
           picked.has(idx) ? picked.delete(idx) : picked.add(idx); render();
         }
         else if ((k === "\r" || k === "\n") && (!multi || idx === DONE)) {
-          const choices = multi ? [...picked] : [idx];
-          finish(choices, keys.slice(i + 1).join("")); // unconsumed keys → next prompt
-          return;
+          finish(multi ? [...picked] : [idx]);
+          return; // deliberately DROP any residue keys — consent must never be auto-answered
         }
       }
     };
@@ -230,7 +233,8 @@ export function showConsent(payload) {
   out.push("");
   out.push(`  ${c.gray("This is")} ${c.bold("the only thing")} ${c.gray("that would be uploaded — anonymous numbers, no code:")}`);
   out.push("");
-  out.push(box(pretty.map((l) => c.cyan(l)), { title: c.gray("payload"), color: c.gray }).split("\n").map((l) => "  " + l).join("\n"));
+  const innerW = Math.min(72, (process.stdout.columns || 80) - 8);
+  out.push(box(pretty.map((l) => fit(c.cyan(l), innerW)), { title: c.gray("payload"), color: c.gray }).split("\n").map((l) => "  " + l).join("\n"));
   out.push("");
   out.push(`  ${c.green("✓")} ${c.dim("You'll appear on the public board under a random handle (like ")}${c.cyan("feral-cachegoblin-73")}${c.dim(") — never your name.")}`);
   out.push(`  ${c.green("✓")} ${c.dim("No account, no email. Never sent: your code, prompts, file names, or project names.")}`);

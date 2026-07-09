@@ -109,7 +109,7 @@ console.log(render(insights, { fileCount, tools: sources.map((s) => s.tool), pla
 // --compare: opt-in, anonymous ranking vs other devs
 if (has("--compare")) {
   const cmp = await import("../src/compare.js");
-  const survey = has("--yes") || has("-y") ? null : await cmp.runSurvey();
+  const survey = has("--yes") || has("-y") || !process.stdin.isTTY ? null : await cmp.runSurvey();
   const payload = cmp.buildPayload(insights, { tool: sources[0]?.tool, plan: Number(val("--plan", "")) || null, survey });
   process.stdout.write(cmp.showConsent(payload));
   const yes = has("--yes") || has("-y");
