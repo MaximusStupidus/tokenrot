@@ -5,7 +5,7 @@
 import { Database } from "bun:sqlite";
 
 const API = process.env.SEED_API || "http://127.0.0.1:7200";
-const DB_PATH = process.env.VIBEAUDIT_DB || "/home/ubuntu/prod/vibeaudit/tokenrot.db";
+const DB_PATH = process.env.VIBEAUDIT_DB || "/home/ubuntu/prod/vibeaudit/vibeaudit.db";
 
 if (process.argv.includes("--purge")) {
   const db = new Database(DB_PATH);
