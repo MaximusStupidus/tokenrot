@@ -305,13 +305,13 @@ canvas.viz{position:absolute;inset:0;z-index:0;width:100%;height:100%;pointer-ev
 
 /* ── distribution ── */
 .dist{padding:6px 18px 18px}
-.d{display:flex;align-items:center;gap:12px;padding:4px 0}
-.d .dl{width:76px;text-align:right;color:var(--dim);font-size:11.5px}
-.d .dt{flex:1;height:9px;background:var(--raise);border-radius:2px;overflow:hidden}
-.d .df{height:100%;background:#3b465c}
-.d.you .df{background:var(--accent)}
-.d .dc{width:44px;color:var(--faint);font-size:11.5px}
-.d.you .dc{color:var(--accent)}
+.dist .d{display:flex;align-items:center;gap:12px;padding:4px 0}
+.dist .d .dl{width:76px;text-align:right;color:var(--dim);font-size:11.5px}
+.dist .d .dt{flex:1;height:9px;background:var(--raise);border-radius:2px;overflow:hidden}
+.dist .d .df{height:100%;background:#3b465c}
+.dist .d.you .df{background:var(--accent)}
+.dist .d .dc{width:44px;color:var(--faint);font-size:11.5px}
+.dist .d.you .dc{color:var(--accent)}
 
 /* ── how it works ── */
 .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
@@ -385,7 +385,7 @@ canvas.viz{position:absolute;inset:0;z-index:0;width:100%;height:100%;pointer-ev
 
 /* ── terminal demo ── */
 .term{background:#06070a;border:1px solid var(--line2);border-radius:10px;padding:18px 20px;
-  font-size:12.5px;line-height:1.8;overflow-x:auto}
+  font-size:12.5px;line-height:1.8;overflow-x:auto;white-space:pre}
 .term .p{color:var(--faint)} .term .c{color:var(--ink2)} .term .a{color:var(--accent)} .term .g{color:var(--green)} .term .d{color:var(--dim)}
 .term .bar{color:var(--accent-dim)}
 
